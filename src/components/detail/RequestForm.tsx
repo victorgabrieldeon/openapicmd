@@ -269,6 +269,17 @@ function DateTimeDisplay({ value, segIdx, dateOnly }: { value: string; segIdx: n
   );
 }
 
+// ── Extract meta from a Parameter schema ─────────────────────────────────
+function paramMeta(p: { type: string; schema?: Record<string, unknown> }) {
+  const baseType = p.type.replace('?', '');
+  const sc = p.schema ?? {};
+  const nullable = p.type.includes('?') || Boolean(sc['nullable']);
+  const rawEnum = sc['enum'] as unknown[] | undefined;
+  const enumValues = rawEnum && rawEnum.length > 0 ? rawEnum.map(String) : undefined;
+  const format = sc['format'] as string | undefined;
+  return { baseType, nullable, enumValues, format };
+}
+
 // ── Persistent cache ──────────────────────────────────────────────────────
 export interface CachedForm {
   pathValues: Record<string, string>;
@@ -508,6 +519,62 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
           }
         }
       }
+
+      // Specialized path/query param handling
+      if (editingField.startsWith('path:') || editingField.startsWith('query:')) {
+        const isPath = editingField.startsWith('path:');
+        const pName = isPath ? editingField.slice(5) : editingField.slice(6);
+        const params = isPath ? pathParams : queryParams;
+        const setValues = isPath ? setPathValues : setQueryValues;
+        const values = isPath ? pathValues : queryValues;
+        const p = params.find((pp) => pp.name === pName);
+        if (p) {
+          const { baseType, nullable, enumValues, format } = paramMeta(p);
+          const cur = values[pName] ?? '';
+
+          if (baseType === 'boolean') {
+            const opts = nullable ? ['true', 'false', 'null'] : ['true', 'false'];
+            const idx = Math.max(0, opts.indexOf(cur));
+            if (key.leftArrow) { setValues((prev) => ({ ...prev, [pName]: opts[(idx - 1 + opts.length) % opts.length]! })); return; }
+            if (key.rightArrow || input === ' ') { setValues((prev) => ({ ...prev, [pName]: opts[(idx + 1) % opts.length]! })); return; }
+          }
+
+          if (enumValues && enumValues.length > 0) {
+            const opts = nullable ? [...enumValues, 'null'] : enumValues;
+            const idx = Math.max(0, opts.indexOf(cur));
+            if (key.leftArrow) { setValues((prev) => ({ ...prev, [pName]: opts[(idx - 1 + opts.length) % opts.length]! })); return; }
+            if (key.rightArrow || input === ' ') { setValues((prev) => ({ ...prev, [pName]: opts[(idx + 1) % opts.length]! })); return; }
+          }
+
+          if (format === 'date-time' || format === 'date') {
+            const dateOnly = format === 'date';
+            const segs = dateOnly ? DATE_SEGS : DT_SEGS;
+            const d = parseDt(cur || formatDt(parseDt(''), dateOnly));
+            if (key.leftArrow) { setDateSegIdx((i) => Math.max(0, i - 1)); setDtTypeBuf(''); return; }
+            if (key.rightArrow) { setDateSegIdx((i) => Math.min(segs.length - 1, i + 1)); setDtTypeBuf(''); return; }
+            if (key.upArrow) { const seg = segs[dateSegIdx]!; const next = { ...d, [seg]: clampDt(seg, d[seg] + 1, d) }; setValues((prev) => ({ ...prev, [pName]: formatDt(next, dateOnly) })); return; }
+            if (key.downArrow) { const seg = segs[dateSegIdx]!; const next = { ...d, [seg]: clampDt(seg, d[seg] - 1, d) }; setValues((prev) => ({ ...prev, [pName]: formatDt(next, dateOnly) })); return; }
+            if (input === 'n') { setValues((prev) => ({ ...prev, [pName]: formatDt(parseDt(''), dateOnly) })); return; }
+            if (/^\d$/.test(input)) {
+              const seg = segs[dateSegIdx]!;
+              const maxLen = seg === 'year' ? 4 : 2;
+              const buf = dtTypeBuf + input;
+              const next = { ...d, [seg]: clampDt(seg, parseInt(buf, 10), d) };
+              setValues((prev) => ({ ...prev, [pName]: formatDt(next, dateOnly) }));
+              if (buf.length >= maxLen) { setDateSegIdx((i) => Math.min(segs.length - 1, i + 1)); setDtTypeBuf(''); }
+              else { setDtTypeBuf(buf); }
+              return;
+            }
+          }
+
+          if (baseType === 'integer') {
+            if (!/^[-\d]$/.test(input) && !key.backspace && !key.delete) return;
+          }
+          if (baseType === 'number') {
+            if (!/^[-\d.]$/.test(input) && !key.backspace && !key.delete) return;
+          }
+        }
+      }
       return;
     }
 
@@ -545,6 +612,24 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
             if (fDef.format === 'date-time' || fDef.format === 'date') {
               setDateSegIdx(0); setDtTypeBuf('');
             }
+          }
+        }
+        if (focusedField.startsWith('path:') || focusedField.startsWith('query:')) {
+          const isPath = focusedField.startsWith('path:');
+          const pName = isPath ? focusedField.slice(5) : focusedField.slice(6);
+          const params = isPath ? pathParams : queryParams;
+          const setValues = isPath ? setPathValues : setQueryValues;
+          const values = isPath ? pathValues : queryValues;
+          const p = params.find((pp) => pp.name === pName);
+          if (p) {
+            const { baseType, enumValues, format } = paramMeta(p);
+            const cur = values[pName] ?? '';
+            if (baseType === 'boolean' && cur === '') setValues((prev) => ({ ...prev, [pName]: 'true' }));
+            if (enumValues?.length && cur === '') setValues((prev) => ({ ...prev, [pName]: enumValues[0]! }));
+            if ((format === 'date-time' || format === 'date') && cur === '') {
+              setValues((prev) => ({ ...prev, [pName]: formatDt(parseDt(''), format === 'date') }));
+            }
+            if (format === 'date-time' || format === 'date') { setDateSegIdx(0); setDtTypeBuf(''); }
           }
         }
         setEditingField(focusedField);
@@ -603,16 +688,26 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
           if (row.kind === 'path') {
             const p = row.param;
             const id = `path:${p.name}`;
+            const { baseType, nullable, enumValues, format } = paramMeta(p);
             const placeholder = p.default ? `default: ${p.default}` : p.type;
             const labelColor = isEditing(id) ? 'green' : isFocused(id) ? 'cyan' : p.required ? 'white' : 'gray';
+            const val = pathValues[p.name] ?? '';
+            const setVal = (v: string) => setPathValues((prev) => ({ ...prev, [p.name]: v }));
+            function renderPathInput() {
+              if (!isEditing(id)) return fieldDisplay(val, placeholder);
+              if (baseType === 'boolean') return <BooleanDisplay value={val} nullable={nullable} />;
+              if (enumValues?.length) return <EnumDisplay value={val} opts={nullable ? [...enumValues, 'null'] : enumValues} />;
+              if (format === 'date-time' || format === 'date') return <DateTimeDisplay value={val} segIdx={dateSegIdx} dateOnly={format === 'date'} />;
+              if (baseType === 'integer') return <TextInput value={val} onChange={(v) => { if (/^-?\d*$/.test(v)) setVal(v); }} focus placeholder="0" />;
+              if (baseType === 'number') return <TextInput value={val} onChange={(v) => { if (/^-?\d*\.?\d*$/.test(v)) setVal(v); }} focus placeholder="0.0" />;
+              return <TextInput value={val} onChange={setVal} focus placeholder={placeholder} />;
+            }
             return (
               <Box key={id}>
                 <Text color={labelColor}>
                   {isFocused(id) ? '▶ ' : '  '}{p.name}{p.required ? <Text color="red">*</Text> : ''}{' (path): '}
                 </Text>
-                {isEditing(id)
-                  ? <TextInput value={pathValues[p.name] ?? ''} onChange={(v) => setPathValues((prev) => ({ ...prev, [p.name]: v }))} focus placeholder={placeholder} />
-                  : fieldDisplay(pathValues[p.name] ?? '', placeholder)}
+                {renderPathInput()}
               </Box>
             );
           }
@@ -621,16 +716,26 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
           if (row.kind === 'query') {
             const p = row.param;
             const id = `query:${p.name}`;
+            const { baseType, nullable, enumValues, format } = paramMeta(p);
             const placeholder = p.default ? `default: ${p.default}` : p.type;
             const labelColor = isEditing(id) ? 'green' : isFocused(id) ? 'cyan' : p.required ? 'white' : 'gray';
+            const val = queryValues[p.name] ?? '';
+            const setVal = (v: string) => setQueryValues((prev) => ({ ...prev, [p.name]: v }));
+            function renderQueryInput() {
+              if (!isEditing(id)) return fieldDisplay(val, placeholder);
+              if (baseType === 'boolean') return <BooleanDisplay value={val} nullable={nullable} />;
+              if (enumValues?.length) return <EnumDisplay value={val} opts={nullable ? [...enumValues, 'null'] : enumValues} />;
+              if (format === 'date-time' || format === 'date') return <DateTimeDisplay value={val} segIdx={dateSegIdx} dateOnly={format === 'date'} />;
+              if (baseType === 'integer') return <TextInput value={val} onChange={(v) => { if (/^-?\d*$/.test(v)) setVal(v); }} focus placeholder="0" />;
+              if (baseType === 'number') return <TextInput value={val} onChange={(v) => { if (/^-?\d*\.?\d*$/.test(v)) setVal(v); }} focus placeholder="0.0" />;
+              return <TextInput value={val} onChange={setVal} focus placeholder={placeholder} />;
+            }
             return (
               <Box key={id}>
                 <Text color={labelColor}>
                   {isFocused(id) ? '▶ ' : '  '}{p.name}{p.required ? <Text color="red">*</Text> : ''}{' (query): '}
                 </Text>
-                {isEditing(id)
-                  ? <TextInput value={queryValues[p.name] ?? ''} onChange={(v) => setQueryValues((prev) => ({ ...prev, [p.name]: v }))} focus placeholder={placeholder} />
-                  : fieldDisplay(queryValues[p.name] ?? '', placeholder)}
+                {renderQueryInput()}
               </Box>
             );
           }
