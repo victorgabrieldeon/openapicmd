@@ -10,6 +10,7 @@ import { DetailPanel } from './detail/DetailPanel.js';
 import { LoadSpec } from './modals/LoadSpec.js';
 import { EnvManager } from './modals/EnvManager.js';
 import { TokenProviderModal } from './modals/TokenProvider.js';
+import { HistoryPanel } from './HistoryPanel.js';
 
 export function App() {
   const { state, dispatch } = useApp();
@@ -39,6 +40,10 @@ export function App() {
     }
     if (input === 'e') {
       dispatch({ type: 'OPEN_MODAL', modal: 'env-manager' });
+      return;
+    }
+    if (input === 'h') {
+      dispatch({ type: 'OPEN_MODAL', modal: 'history' });
       return;
     }
     if (key.tab) {
@@ -88,6 +93,16 @@ export function App() {
       <Box flexDirection="column" height={termHeight}>
         <Header />
         <TokenProviderModal />
+        <Footer />
+      </Box>
+    );
+  }
+
+  if (state.activeModal === 'history') {
+    return (
+      <Box flexDirection="column" height={termHeight}>
+        <Header />
+        <HistoryPanel height={contentHeight} />
         <Footer />
       </Box>
     );

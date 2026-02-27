@@ -26,6 +26,9 @@ export function DetailPanel({ height }: DetailPanelProps) {
     if (input === 't' && endpoint) {
       dispatch({ type: 'OPEN_MODAL', modal: 'token-provider' });
     }
+    if (input === 'h') {
+      dispatch({ type: 'OPEN_MODAL', modal: 'history' });
+    }
   });
 
   if (!endpoint) {
@@ -55,7 +58,7 @@ export function DetailPanel({ height }: DetailPanelProps) {
 
       {isDetailFocused && (
         <Box paddingX={1} marginTop={1}>
-          <Text color="gray">{'[r] Execute request  [t] Token provider'}</Text>
+          <Text color="gray">{'[r] Execute request  [t] Token provider  [h] History'}</Text>
         </Box>
       )}
     </Box>

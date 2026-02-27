@@ -9,6 +9,7 @@ import { useRequest } from '../../hooks/useRequest.js';
 import { ResponseView } from './ResponseView.js';
 import { JsonTree } from './JsonTree.js';
 import { hasTokenCached } from '../../lib/executor.js';
+import { useApp } from '../../context/AppContext.js';
 
 interface RequestFormProps {
   endpoint: Endpoint;
@@ -163,13 +164,24 @@ function buildInitialFieldValues(fields: BodyFieldDef[], schema: Record<string, 
 }
 
 // ── Persistent cache ──────────────────────────────────────────────────────
-interface CachedForm {
+export interface CachedForm {
   pathValues: Record<string, string>;
   queryValues: Record<string, string>;
   headersStr: string;
   bodyFieldValues: Record<string, string>;
 }
 const formCache = new Map<string, CachedForm>();
+
+/** Pre-fill form cache from outside (e.g. history load) */
+export function preFillFormCache(endpointId: string, values: Partial<CachedForm>): void {
+  const existing = formCache.get(endpointId);
+  formCache.set(endpointId, {
+    pathValues: values.pathValues ?? existing?.pathValues ?? {},
+    queryValues: values.queryValues ?? existing?.queryValues ?? {},
+    headersStr: values.headersStr ?? existing?.headersStr ?? '',
+    bodyFieldValues: values.bodyFieldValues ?? existing?.bodyFieldValues ?? {},
+  });
+}
 
 // ── FormRow types ─────────────────────────────────────────────────────────
 type FormRow =
@@ -181,6 +193,7 @@ type FormRow =
 
 // ─────────────────────────────────────────────────────────────────────────
 export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, height }: RequestFormProps) {
+  const { dispatch } = useApp();
   const pathParams = endpoint.parameters.filter((p) => p.in === 'path');
   const queryParams = endpoint.parameters.filter((p) => p.in === 'query');
 
@@ -320,6 +333,7 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
     }
 
     if (key.escape) { onClose(); return; }
+    if (input === 'h') { dispatch({ type: 'OPEN_MODAL', modal: 'history' }); return; }
     if (key.tab && !key.shift) { moveFocus(1); return; }
     if ((key.tab && key.shift) || key.upArrow) { moveFocus(-1); return; }
     if (key.downArrow) { moveFocus(1); return; }
@@ -358,7 +372,7 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
           <Text bold color="cyan">{'REQUEST  '}</Text>
           {editingField
             ? <Text color="gray">{'[Enter] confirm  [Esc] cancel edit  [Ctrl+Enter] send'}</Text>
-            : <Text color="gray">{'[↑↓/Tab] navigate  [Enter] edit  [Ctrl+Enter] send  [Esc] close'}</Text>
+            : <Text color="gray">{'[↑↓/Tab] navigate  [Enter] edit  [Ctrl+Enter] send  [h] history  [Esc] close'}</Text>
           }
         </Box>
 
