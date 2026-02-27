@@ -28,6 +28,9 @@ type BodyFieldDef = {
   description?: string;
   indent: number;
   isGroupHeader: boolean; // object/array section header — no input, just label
+  nullable: boolean;
+  enumValues?: string[];  // enum constraint values
+  format?: string;        // e.g. 'date-time', 'date', 'email'
 };
 
 function fieldType(schema: Record<string, unknown>): string {
@@ -76,16 +79,34 @@ function extractBodyFields(
     const type = fieldType(fs);
     const description = fs['description'] as string | undefined;
 
-    const effectiveSchema = fs['allOf'] ? mergeAllOf(fs) : fs;
+    // Resolve the "real" schema — unwrap nullable oneOf to get the inner type
+    let baseSchema: Record<string, unknown> = fs;
+    let nullable = Boolean(fs['nullable']);
+    if (fs['oneOf']) {
+      const arr = fs['oneOf'] as Record<string, unknown>[];
+      nullable = nullable || arr.some((s) => s['type'] === 'null');
+      const nonNull = arr.find((s) => s['type'] !== 'null');
+      if (nonNull) baseSchema = nonNull;
+    }
+
+    const effectiveSchema = baseSchema['allOf'] ? mergeAllOf(baseSchema) : baseSchema;
+
+    // Enum values (from direct enum or effectiveSchema)
+    const rawEnum = (effectiveSchema['enum'] ?? fs['enum']) as unknown[] | undefined;
+    const enumValues = rawEnum && rawEnum.length > 0 ? rawEnum.map(String) : undefined;
+
+    // Format (date-time, date, email, etc.)
+    const format = (effectiveSchema['format'] ?? fs['format']) as string | undefined;
+
     const hasProps = Boolean(effectiveSchema['properties']) || Boolean(effectiveSchema['allOf']);
     const isObject = (effectiveSchema['type'] === 'object' || hasProps) && indent < maxDepth;
 
     if (isObject && hasProps) {
       // Group header — no input
-      fields.push({ label: name, fullKey, type, required: isRequired, description, indent, isGroupHeader: true });
+      fields.push({ label: name, fullKey, type, required: isRequired, description, indent, isGroupHeader: true, nullable, enumValues, format });
       fields.push(...extractBodyFields(effectiveSchema, fullKey, indent + 1, maxDepth));
     } else {
-      fields.push({ label: name, fullKey, type, required: isRequired, description, indent, isGroupHeader: false });
+      fields.push({ label: name, fullKey, type, required: isRequired, description, indent, isGroupHeader: false, nullable, enumValues, format });
     }
   }
 
@@ -95,8 +116,10 @@ function extractBodyFields(
 // ── Serialise flat field values → nested JSON object ──────────────────────
 function coerceValue(raw: string, type: string): unknown {
   if (raw === '') return undefined;
-  if (type === 'number' || type === 'integer') { const n = Number(raw); return isNaN(n) ? raw : n; }
-  if (type === 'boolean') return raw === 'true' || raw === '1';
+  if (raw === 'null') return null;
+  const baseType = type.replace('?', '');
+  if (baseType === 'number' || baseType === 'integer') { const n = Number(raw); return isNaN(n) ? raw : n; }
+  if (baseType === 'boolean') return raw === 'true';
   if (type.endsWith('[]') || type === 'object' || type === 'any') {
     try { return JSON.parse(raw); } catch { return raw; }
   }
@@ -161,6 +184,89 @@ function buildInitialFieldValues(fields: BodyFieldDef[], schema: Record<string, 
   if (props) walk(props, '');
 
   return values;
+}
+
+// ── DateTime helpers ──────────────────────────────────────────────────────
+type DtSeg = 'year' | 'month' | 'day' | 'hour' | 'min' | 'sec';
+const DT_SEGS: DtSeg[] = ['year', 'month', 'day', 'hour', 'min', 'sec'];
+const DATE_SEGS: DtSeg[] = ['year', 'month', 'day'];
+
+function parseDt(value: string): Record<DtSeg, number> {
+  const now = new Date();
+  const def = { year: now.getFullYear(), month: now.getMonth() + 1, day: now.getDate(), hour: now.getHours(), min: now.getMinutes(), sec: now.getSeconds() };
+  if (!value) return def;
+  const m = value.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2}))?)?/);
+  if (!m) return def;
+  return { year: +m[1]!, month: +m[2]!, day: +m[3]!, hour: +(m[4] ?? '0'), min: +(m[5] ?? '0'), sec: +(m[6] ?? '0') };
+}
+
+function formatDt(d: Record<DtSeg, number>, dateOnly: boolean): string {
+  const p = (n: number, l = 2) => String(n).padStart(l, '0');
+  return dateOnly
+    ? `${p(d.year, 4)}-${p(d.month)}-${p(d.day)}`
+    : `${p(d.year, 4)}-${p(d.month)}-${p(d.day)}T${p(d.hour)}:${p(d.min)}:${p(d.sec)}`;
+}
+
+function clampDt(seg: DtSeg, val: number, d: Record<DtSeg, number>): number {
+  const mins: Record<DtSeg, number> = { year: 1900, month: 1, day: 1, hour: 0, min: 0, sec: 0 };
+  const daysInMonth = new Date(d.year, d.month, 0).getDate();
+  const maxs: Record<DtSeg, number> = { year: 2100, month: 12, day: daysInMonth, hour: 23, min: 59, sec: 59 };
+  return Math.max(mins[seg], Math.min(maxs[seg], val));
+}
+
+// ── Specialized display components ────────────────────────────────────────
+function BooleanDisplay({ value, nullable }: { value: string; nullable: boolean }) {
+  const opts = nullable ? ['true', 'false', 'null'] : ['true', 'false'];
+  return (
+    <Box>
+      {opts.map((opt, i) => (
+        <Text key={opt}>
+          {i > 0 && <Text color="gray">{' '}</Text>}
+          {opt === value
+            ? <Text backgroundColor={opt === 'null' ? 'gray' : opt === 'true' ? 'green' : 'red'} color="black">{` ${opt} `}</Text>
+            : <Text color="gray">{opt}</Text>}
+        </Text>
+      ))}
+      <Text color="gray">{'  [←→]'}</Text>
+    </Box>
+  );
+}
+
+function EnumDisplay({ value, opts }: { value: string; opts: string[] }) {
+  return (
+    <Box>
+      {opts.map((opt, i) => (
+        <Text key={opt}>
+          {i > 0 && <Text color="gray">{' '}</Text>}
+          {opt === value
+            ? <Text backgroundColor="cyan" color="black">{` ${opt} `}</Text>
+            : <Text color="gray">{opt}</Text>}
+        </Text>
+      ))}
+      <Text color="gray">{'  [←→]'}</Text>
+    </Box>
+  );
+}
+
+function DateTimeDisplay({ value, segIdx, dateOnly }: { value: string; segIdx: number; dateOnly: boolean }) {
+  const d = parseDt(value);
+  const p = (n: number, l = 2) => String(n).padStart(l, '0');
+  const segs = dateOnly ? DATE_SEGS : DT_SEGS;
+  const labels = [p(d.year, 4), p(d.month), p(d.day), p(d.hour), p(d.min), p(d.sec)];
+  const seps = ['', '-', '-', 'T', ':', ':'];
+  return (
+    <Box>
+      {segs.map((seg, i) => (
+        <Text key={seg}>
+          <Text color="gray">{seps[i]}</Text>
+          <Text color={i === segIdx ? 'black' : 'white'} backgroundColor={i === segIdx ? 'cyan' : undefined}>
+            {labels[i]}
+          </Text>
+        </Text>
+      ))}
+      <Text color="gray">{'  [←→] seg  [↑↓] val  [n] now'}</Text>
+    </Box>
+  );
 }
 
 // ── Persistent cache ──────────────────────────────────────────────────────
@@ -229,6 +335,8 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
   const [scrollOff, setScrollOff] = useState(0);
   const [treeMode, setTreeMode] = useState(false);
   const [collapsedBodyGroups, setCollapsedBodyGroups] = useState<Set<string>>(new Set());
+  const [dateSegIdx, setDateSegIdx] = useState(0);
+  const [dtTypeBuf, setDtTypeBuf] = useState('');
 
   // Navigation fields — group headers navigable as body-group:key, children skipped when group is collapsed
   const fields = useMemo(() => {
@@ -329,6 +437,77 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
       if (key.ctrl && key.return) { void handleSubmit(); return; }
       if (key.return) { setEditingField(null); moveFocus(1); return; }
       if (key.escape) { setEditingField(null); return; }
+
+      // Specialized body field handling
+      if (editingField.startsWith('body:')) {
+        const fKey = editingField.slice(5);
+        const fDef = bodyFieldDefs.find((f) => f.fullKey === fKey);
+        if (fDef) {
+          const baseType = fDef.type.replace('?', '');
+          const cur = bodyFieldValues[fKey] ?? '';
+
+          // Boolean toggle
+          if (baseType === 'boolean') {
+            const opts = fDef.nullable ? ['true', 'false', 'null'] : ['true', 'false'];
+            const idx = Math.max(0, opts.indexOf(cur));
+            if (key.leftArrow) { setBodyField(fKey, opts[(idx - 1 + opts.length) % opts.length]!); return; }
+            if (key.rightArrow || input === ' ') { setBodyField(fKey, opts[(idx + 1) % opts.length]!); return; }
+          }
+
+          // Enum cycle
+          if (fDef.enumValues && fDef.enumValues.length > 0) {
+            const opts = fDef.nullable ? [...fDef.enumValues, 'null'] : fDef.enumValues;
+            const idx = Math.max(0, opts.indexOf(cur));
+            if (key.leftArrow) { setBodyField(fKey, opts[(idx - 1 + opts.length) % opts.length]!); return; }
+            if (key.rightArrow || input === ' ') { setBodyField(fKey, opts[(idx + 1) % opts.length]!); return; }
+          }
+
+          // DateTime segment navigation
+          if (fDef.format === 'date-time' || fDef.format === 'date') {
+            const dateOnly = fDef.format === 'date';
+            const segs = dateOnly ? DATE_SEGS : DT_SEGS;
+            const d = parseDt(cur || formatDt(parseDt(''), dateOnly));
+
+            if (key.leftArrow) { setDateSegIdx((i) => Math.max(0, i - 1)); setDtTypeBuf(''); return; }
+            if (key.rightArrow) { setDateSegIdx((i) => Math.min(segs.length - 1, i + 1)); setDtTypeBuf(''); return; }
+            if (key.upArrow) {
+              const seg = segs[dateSegIdx]!;
+              const next = { ...d, [seg]: clampDt(seg, d[seg] + 1, d) };
+              setBodyField(fKey, formatDt(next, dateOnly)); return;
+            }
+            if (key.downArrow) {
+              const seg = segs[dateSegIdx]!;
+              const next = { ...d, [seg]: clampDt(seg, d[seg] - 1, d) };
+              setBodyField(fKey, formatDt(next, dateOnly)); return;
+            }
+            if (input === 'n') {
+              setBodyField(fKey, formatDt(parseDt(''), dateOnly)); return;
+            }
+            if (/^\d$/.test(input)) {
+              const seg = segs[dateSegIdx]!;
+              const maxLen = seg === 'year' ? 4 : 2;
+              const buf = dtTypeBuf + input;
+              const next = { ...d, [seg]: clampDt(seg, parseInt(buf, 10), d) };
+              setBodyField(fKey, formatDt(next, dateOnly));
+              if (buf.length >= maxLen) {
+                setDateSegIdx((i) => Math.min(segs.length - 1, i + 1));
+                setDtTypeBuf('');
+              } else {
+                setDtTypeBuf(buf);
+              }
+              return;
+            }
+          }
+
+          // Number: block non-numeric input (text handled by TextInput)
+          if (baseType === 'integer') {
+            if (!/^[-\d]$/.test(input) && !key.backspace && !key.delete) return;
+          }
+          if (baseType === 'number') {
+            if (!/^[-\d.]$/.test(input) && !key.backspace && !key.delete) return;
+          }
+        }
+      }
       return;
     }
 
@@ -350,7 +529,26 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
         });
         return;
       }
-      if (focusedField !== '__submit__') setEditingField(focusedField);
+      if (focusedField !== '__submit__') {
+        // Auto-initialize specialized fields when entering edit mode
+        if (focusedField.startsWith('body:')) {
+          const fKey = focusedField.slice(5);
+          const fDef = bodyFieldDefs.find((f) => f.fullKey === fKey);
+          if (fDef) {
+            const cur = bodyFieldValues[fKey] ?? '';
+            const baseType = fDef.type.replace('?', '');
+            if (baseType === 'boolean' && cur === '') setBodyField(fKey, 'true');
+            if (fDef.enumValues?.length && cur === '') setBodyField(fKey, fDef.enumValues[0]!);
+            if ((fDef.format === 'date-time' || fDef.format === 'date') && cur === '') {
+              setBodyField(fKey, formatDt(parseDt(''), fDef.format === 'date'));
+            }
+            if (fDef.format === 'date-time' || fDef.format === 'date') {
+              setDateSegIdx(0); setDtTypeBuf('');
+            }
+          }
+        }
+        setEditingField(focusedField);
+      }
       return;
     }
   });
@@ -493,7 +691,31 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
             const labelColor = isEditing(id) ? 'green' : isFocused(id) ? 'cyan' : f.required ? 'white' : 'gray';
             const arrow = isFocused(id) ? '▶ ' : '  ';
             const value = bodyFieldValues[f.fullKey] ?? '';
-            const placeholder = f.type;
+            const baseType = f.type.replace('?', '');
+
+            // Determine which specialized input to use when editing
+            const isBoolean = baseType === 'boolean';
+            const isEnum = (f.enumValues?.length ?? 0) > 0;
+            const isDateTime = f.format === 'date-time' || f.format === 'date';
+            const isInteger = baseType === 'integer';
+            const isNumber = baseType === 'number';
+
+            function renderInput() {
+              if (!isEditing(id)) return fieldDisplay(value, f.type);
+              if (isBoolean) return <BooleanDisplay value={value} nullable={f.nullable} />;
+              if (isEnum) {
+                const opts = f.nullable ? [...f.enumValues!, 'null'] : f.enumValues!;
+                return <EnumDisplay value={value} opts={opts} />;
+              }
+              if (isDateTime) return <DateTimeDisplay value={value} segIdx={dateSegIdx} dateOnly={f.format === 'date'} />;
+              if (isInteger) {
+                return <TextInput value={value} onChange={(v) => { if (/^-?\d*$/.test(v)) setBodyField(f.fullKey, v); }} focus placeholder="0" />;
+              }
+              if (isNumber) {
+                return <TextInput value={value} onChange={(v) => { if (/^-?\d*\.?\d*$/.test(v)) setBodyField(f.fullKey, v); }} focus placeholder="0.0" />;
+              }
+              return <TextInput value={value} onChange={(v) => setBodyField(f.fullKey, v)} focus placeholder={f.type} />;
+            }
 
             return (
               <Box key={f.fullKey}>
@@ -504,9 +726,7 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
                 <Text color="gray">{'('}</Text>
                 <Text color={labelColor === 'gray' ? 'gray' : 'cyan'}>{f.type}</Text>
                 <Text color="gray">{'): '}</Text>
-                {isEditing(id)
-                  ? <TextInput value={value} onChange={(v) => setBodyField(f.fullKey, v)} focus placeholder={placeholder} />
-                  : fieldDisplay(value, placeholder)}
+                {renderInput()}
               </Box>
             );
           }
