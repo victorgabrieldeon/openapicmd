@@ -233,14 +233,15 @@ function BooleanDisplay({ value, nullable }: { value: string; nullable: boolean 
 }
 
 function EnumDisplay({ value, opts }: { value: string; opts: string[] }) {
+  // opts[0] is always '' (empty/unset), displayed as '—'
   return (
     <Box>
       {opts.map((opt, i) => (
-        <Text key={opt}>
+        <Text key={i}>
           {i > 0 && <Text color="gray">{' '}</Text>}
           {opt === value
-            ? <Text backgroundColor="cyan" color="black">{` ${opt} `}</Text>
-            : <Text color="gray">{opt}</Text>}
+            ? <Text backgroundColor={opt === '' ? 'gray' : 'cyan'} color="black">{` ${opt || '—'} `}</Text>
+            : <Text color={opt === '' ? 'gray' : 'gray'}>{opt || '—'}</Text>}
         </Text>
       ))}
       <Text color="gray">{'  [←→]'}</Text>
@@ -249,6 +250,9 @@ function EnumDisplay({ value, opts }: { value: string; opts: string[] }) {
 }
 
 function DateTimeDisplay({ value, segIdx, dateOnly }: { value: string; segIdx: number; dateOnly: boolean }) {
+  if (!value) {
+    return <Text color="gray">{'—  [↑↓] set to now  [n] now'}</Text>;
+  }
   const d = parseDt(value);
   const p = (n: number, l = 2) => String(n).padStart(l, '0');
   const segs = dateOnly ? DATE_SEGS : DT_SEGS;
@@ -264,7 +268,7 @@ function DateTimeDisplay({ value, segIdx, dateOnly }: { value: string; segIdx: n
           </Text>
         </Text>
       ))}
-      <Text color="gray">{'  [←→] seg  [↑↓] val  [n] now'}</Text>
+      <Text color="gray">{'  [←→] seg  [↑↓] val  [n] now  [Del] clear'}</Text>
     </Box>
   );
 }
@@ -467,7 +471,7 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
 
           // Enum cycle
           if (fDef.enumValues && fDef.enumValues.length > 0) {
-            const opts = fDef.nullable ? [...fDef.enumValues, 'null'] : fDef.enumValues;
+            const opts = ['', ...(fDef.nullable ? [...fDef.enumValues, 'null'] : fDef.enumValues)];
             const idx = Math.max(0, opts.indexOf(cur));
             if (key.leftArrow) { setBodyField(fKey, opts[(idx - 1 + opts.length) % opts.length]!); return; }
             if (key.rightArrow || input === ' ') { setBodyField(fKey, opts[(idx + 1) % opts.length]!); return; }
@@ -477,35 +481,31 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
           if (fDef.format === 'date-time' || fDef.format === 'date') {
             const dateOnly = fDef.format === 'date';
             const segs = dateOnly ? DATE_SEGS : DT_SEGS;
-            const d = parseDt(cur || formatDt(parseDt(''), dateOnly));
 
+            if (key.delete || key.backspace) { setBodyField(fKey, ''); setDtTypeBuf(''); return; }
             if (key.leftArrow) { setDateSegIdx((i) => Math.max(0, i - 1)); setDtTypeBuf(''); return; }
             if (key.rightArrow) { setDateSegIdx((i) => Math.min(segs.length - 1, i + 1)); setDtTypeBuf(''); return; }
-            if (key.upArrow) {
+            if (key.upArrow || key.downArrow) {
+              const base = cur || formatDt(parseDt(''), dateOnly);
+              if (!cur) { setBodyField(fKey, base); return; }
+              const d = parseDt(cur);
               const seg = segs[dateSegIdx]!;
-              const next = { ...d, [seg]: clampDt(seg, d[seg] + 1, d) };
-              setBodyField(fKey, formatDt(next, dateOnly)); return;
-            }
-            if (key.downArrow) {
-              const seg = segs[dateSegIdx]!;
-              const next = { ...d, [seg]: clampDt(seg, d[seg] - 1, d) };
+              const next = { ...d, [seg]: clampDt(seg, d[seg] + (key.upArrow ? 1 : -1), d) };
               setBodyField(fKey, formatDt(next, dateOnly)); return;
             }
             if (input === 'n') {
               setBodyField(fKey, formatDt(parseDt(''), dateOnly)); return;
             }
             if (/^\d$/.test(input)) {
+              const base = cur || formatDt(parseDt(''), dateOnly);
+              const d = parseDt(base);
               const seg = segs[dateSegIdx]!;
               const maxLen = seg === 'year' ? 4 : 2;
               const buf = dtTypeBuf + input;
               const next = { ...d, [seg]: clampDt(seg, parseInt(buf, 10), d) };
               setBodyField(fKey, formatDt(next, dateOnly));
-              if (buf.length >= maxLen) {
-                setDateSegIdx((i) => Math.min(segs.length - 1, i + 1));
-                setDtTypeBuf('');
-              } else {
-                setDtTypeBuf(buf);
-              }
+              if (buf.length >= maxLen) { setDateSegIdx((i) => Math.min(segs.length - 1, i + 1)); setDtTypeBuf(''); }
+              else { setDtTypeBuf(buf); }
               return;
             }
           }
@@ -540,7 +540,7 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
           }
 
           if (enumValues && enumValues.length > 0) {
-            const opts = nullable ? [...enumValues, 'null'] : enumValues;
+            const opts = ['', ...(nullable ? [...enumValues, 'null'] : enumValues)];
             const idx = Math.max(0, opts.indexOf(cur));
             if (key.leftArrow) { setValues((prev) => ({ ...prev, [pName]: opts[(idx - 1 + opts.length) % opts.length]! })); return; }
             if (key.rightArrow || input === ' ') { setValues((prev) => ({ ...prev, [pName]: opts[(idx + 1) % opts.length]! })); return; }
@@ -549,13 +549,22 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
           if (format === 'date-time' || format === 'date') {
             const dateOnly = format === 'date';
             const segs = dateOnly ? DATE_SEGS : DT_SEGS;
-            const d = parseDt(cur || formatDt(parseDt(''), dateOnly));
+
+            if (key.delete || key.backspace) { setValues((prev) => ({ ...prev, [pName]: '' })); setDtTypeBuf(''); return; }
             if (key.leftArrow) { setDateSegIdx((i) => Math.max(0, i - 1)); setDtTypeBuf(''); return; }
             if (key.rightArrow) { setDateSegIdx((i) => Math.min(segs.length - 1, i + 1)); setDtTypeBuf(''); return; }
-            if (key.upArrow) { const seg = segs[dateSegIdx]!; const next = { ...d, [seg]: clampDt(seg, d[seg] + 1, d) }; setValues((prev) => ({ ...prev, [pName]: formatDt(next, dateOnly) })); return; }
-            if (key.downArrow) { const seg = segs[dateSegIdx]!; const next = { ...d, [seg]: clampDt(seg, d[seg] - 1, d) }; setValues((prev) => ({ ...prev, [pName]: formatDt(next, dateOnly) })); return; }
+            if (key.upArrow || key.downArrow) {
+              const base = cur || formatDt(parseDt(''), dateOnly);
+              if (!cur) { setValues((prev) => ({ ...prev, [pName]: base })); return; }
+              const d = parseDt(cur);
+              const seg = segs[dateSegIdx]!;
+              const next = { ...d, [seg]: clampDt(seg, d[seg] + (key.upArrow ? 1 : -1), d) };
+              setValues((prev) => ({ ...prev, [pName]: formatDt(next, dateOnly) })); return;
+            }
             if (input === 'n') { setValues((prev) => ({ ...prev, [pName]: formatDt(parseDt(''), dateOnly) })); return; }
             if (/^\d$/.test(input)) {
+              const base = cur || formatDt(parseDt(''), dateOnly);
+              const d = parseDt(base);
               const seg = segs[dateSegIdx]!;
               const maxLen = seg === 'year' ? 4 : 2;
               const buf = dtTypeBuf + input;
@@ -605,10 +614,6 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
             const cur = bodyFieldValues[fKey] ?? '';
             const baseType = fDef.type.replace('?', '');
             if (baseType === 'boolean' && cur === '') setBodyField(fKey, 'true');
-            if (fDef.enumValues?.length && cur === '') setBodyField(fKey, fDef.enumValues[0]!);
-            if ((fDef.format === 'date-time' || fDef.format === 'date') && cur === '') {
-              setBodyField(fKey, formatDt(parseDt(''), fDef.format === 'date'));
-            }
             if (fDef.format === 'date-time' || fDef.format === 'date') {
               setDateSegIdx(0); setDtTypeBuf('');
             }
@@ -625,10 +630,6 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
             const { baseType, enumValues, format } = paramMeta(p);
             const cur = values[pName] ?? '';
             if (baseType === 'boolean' && cur === '') setValues((prev) => ({ ...prev, [pName]: 'true' }));
-            if (enumValues?.length && cur === '') setValues((prev) => ({ ...prev, [pName]: enumValues[0]! }));
-            if ((format === 'date-time' || format === 'date') && cur === '') {
-              setValues((prev) => ({ ...prev, [pName]: formatDt(parseDt(''), format === 'date') }));
-            }
             if (format === 'date-time' || format === 'date') { setDateSegIdx(0); setDtTypeBuf(''); }
           }
         }
@@ -696,7 +697,7 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
             function renderPathInput() {
               if (!isEditing(id)) return fieldDisplay(val, placeholder);
               if (baseType === 'boolean') return <BooleanDisplay value={val} nullable={nullable} />;
-              if (enumValues?.length) return <EnumDisplay value={val} opts={nullable ? [...enumValues, 'null'] : enumValues} />;
+              if (enumValues?.length) return <EnumDisplay value={val} opts={['', ...(nullable ? [...enumValues, 'null'] : enumValues)]} />;
               if (format === 'date-time' || format === 'date') return <DateTimeDisplay value={val} segIdx={dateSegIdx} dateOnly={format === 'date'} />;
               if (baseType === 'integer') return <TextInput value={val} onChange={(v) => { if (/^-?\d*$/.test(v)) setVal(v); }} focus placeholder="0" />;
               if (baseType === 'number') return <TextInput value={val} onChange={(v) => { if (/^-?\d*\.?\d*$/.test(v)) setVal(v); }} focus placeholder="0.0" />;
@@ -724,7 +725,7 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
             function renderQueryInput() {
               if (!isEditing(id)) return fieldDisplay(val, placeholder);
               if (baseType === 'boolean') return <BooleanDisplay value={val} nullable={nullable} />;
-              if (enumValues?.length) return <EnumDisplay value={val} opts={nullable ? [...enumValues, 'null'] : enumValues} />;
+              if (enumValues?.length) return <EnumDisplay value={val} opts={['', ...(nullable ? [...enumValues, 'null'] : enumValues)]} />;
               if (format === 'date-time' || format === 'date') return <DateTimeDisplay value={val} segIdx={dateSegIdx} dateOnly={format === 'date'} />;
               if (baseType === 'integer') return <TextInput value={val} onChange={(v) => { if (/^-?\d*$/.test(v)) setVal(v); }} focus placeholder="0" />;
               if (baseType === 'number') return <TextInput value={val} onChange={(v) => { if (/^-?\d*\.?\d*$/.test(v)) setVal(v); }} focus placeholder="0.0" />;
@@ -809,7 +810,7 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
               if (!isEditing(id)) return fieldDisplay(value, f.type);
               if (isBoolean) return <BooleanDisplay value={value} nullable={f.nullable} />;
               if (isEnum) {
-                const opts = f.nullable ? [...f.enumValues!, 'null'] : f.enumValues!;
+                const opts = ['', ...(f.nullable ? [...f.enumValues!, 'null'] : f.enumValues!)];
                 return <EnumDisplay value={value} opts={opts} />;
               }
               if (isDateTime) return <DateTimeDisplay value={value} segIdx={dateSegIdx} dateOnly={f.format === 'date'} />;
