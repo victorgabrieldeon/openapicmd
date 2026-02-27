@@ -11,6 +11,7 @@ import { LoadSpec } from './modals/LoadSpec.js';
 import { EnvManager } from './modals/EnvManager.js';
 import { TokenProviderModal } from './modals/TokenProvider.js';
 import { HistoryPanel } from './HistoryPanel.js';
+import { SavedRequestsPanel } from './SavedRequestsPanel.js';
 
 export function App() {
   const { state, dispatch } = useApp();
@@ -44,6 +45,10 @@ export function App() {
     }
     if (input === 'h') {
       dispatch({ type: 'OPEN_MODAL', modal: 'history' });
+      return;
+    }
+    if (input === 's') {
+      dispatch({ type: 'OPEN_MODAL', modal: 'saved-requests' });
       return;
     }
     if (key.tab) {
@@ -103,6 +108,16 @@ export function App() {
       <Box flexDirection="column" height={termHeight}>
         <Header />
         <HistoryPanel height={contentHeight} />
+        <Footer />
+      </Box>
+    );
+  }
+
+  if (state.activeModal === 'saved-requests') {
+    return (
+      <Box flexDirection="column" height={termHeight}>
+        <Header />
+        <SavedRequestsPanel height={contentHeight} />
         <Footer />
       </Box>
     );

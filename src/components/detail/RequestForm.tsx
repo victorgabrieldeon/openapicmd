@@ -10,6 +10,7 @@ import { ResponseView } from './ResponseView.js';
 import { JsonTree } from './JsonTree.js';
 import { hasTokenCached } from '../../lib/executor.js';
 import { useApp } from '../../context/AppContext.js';
+import { saveRequest } from '../../lib/saved-requests.js';
 
 interface RequestFormProps {
   endpoint: Endpoint;
@@ -352,6 +353,8 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
   const [collapsedBodyGroups, setCollapsedBodyGroups] = useState<Set<string>>(new Set());
   const [dateSegIdx, setDateSegIdx] = useState(0);
   const [dtTypeBuf, setDtTypeBuf] = useState('');
+  const [saveMode, setSaveMode] = useState(false);
+  const [saveName, setSaveName] = useState('');
 
   // Navigation fields — group headers navigable as body-group:key, children skipped when group is collapsed
   const fields = useMemo(() => {
@@ -445,8 +448,36 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
     await execute(endpoint, values, env, effectiveBaseUrl);
   }, [pathValues, queryValues, headersStr, bodyFieldValues, bodyFieldDefs, collapsedBodyGroups, endpoint, env, effectiveBaseUrl, execute]);
 
+  const handleSave = useCallback(() => {
+    const name = saveName.trim() || `${endpoint.method.toUpperCase()} ${endpoint.path}`;
+    let parsedHeaders: Record<string, string> = {};
+    if (headersStr.trim()) {
+      try { parsedHeaders = JSON.parse(headersStr); } catch { /* ignore */ }
+    }
+    const bodyStr = bodyFieldDefs.length > 0
+      ? serializeBodyFields(bodyFieldDefs, bodyFieldValues, collapsedBodyGroups)
+      : '';
+    saveRequest({
+      name,
+      endpointId: endpoint.id,
+      method: endpoint.method,
+      path: endpoint.path,
+      envName: env?.name ?? null,
+      values: { pathParams: pathValues, queryParams: queryValues, headers: parsedHeaders, body: bodyStr },
+      bodyFieldValues,
+    });
+    setSaveMode(false);
+    setSaveName('');
+  }, [saveName, headersStr, bodyFieldDefs, bodyFieldValues, collapsedBodyGroups, pathValues, queryValues, endpoint, env]);
+
   useInput((input, key) => {
     if (treeMode) return;
+
+    if (saveMode) {
+      if (key.return) { handleSave(); return; }
+      if (key.escape) { setSaveMode(false); setSaveName(''); return; }
+      return;
+    }
 
     if (editingField !== null) {
       if (key.ctrl && key.return) { void handleSubmit(); return; }
@@ -589,6 +620,8 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
 
     if (key.escape) { onClose(); return; }
     if (input === 'h') { dispatch({ type: 'OPEN_MODAL', modal: 'history' }); return; }
+    if (input === 's') { setSaveMode(true); setSaveName(`${endpoint.method.toUpperCase()} ${endpoint.path}`); return; }
+    if (input === 'S') { dispatch({ type: 'OPEN_MODAL', modal: 'saved-requests' }); return; }
     if (key.tab && !key.shift) { moveFocus(1); return; }
     if ((key.tab && key.shift) || key.upArrow) { moveFocus(-1); return; }
     if (key.downArrow) { moveFocus(1); return; }
@@ -654,10 +687,16 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
 
         <Box>
           <Text bold color="cyan">{'REQUEST  '}</Text>
-          {editingField
+          {saveMode
+            ? <Text color="yellow">{'Save as: '}</Text>
+            : editingField
             ? <Text color="gray">{'[Enter] confirm  [Esc] cancel edit  [Ctrl+Enter] send'}</Text>
-            : <Text color="gray">{'[↑↓/Tab] navigate  [Enter] edit  [Ctrl+Enter] send  [h] history  [Esc] close'}</Text>
+            : <Text color="gray">{'[↑↓/Tab] navigate  [Enter] edit  [Ctrl+Enter] send  [s] save  [h] history  [Esc] close'}</Text>
           }
+          {saveMode && (
+            <TextInput value={saveName} onChange={setSaveName} focus placeholder={`${endpoint.method.toUpperCase()} ${endpoint.path}`} />
+          )}
+          {saveMode && <Text color="gray">{'  [Enter] confirm  [Esc] cancel'}</Text>}
         </Box>
 
         {/* Base URL */}

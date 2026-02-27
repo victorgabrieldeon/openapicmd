@@ -3,7 +3,7 @@ import type { Endpoint, ParsedSpec, TagGroup } from '../types/openapi.js';
 import type { Environment } from '../types/config.js';
 
 export type ActivePanel = 'sidebar' | 'detail' | 'request' | 'modal';
-export type ModalType = 'load-spec' | 'env-manager' | 'token-provider' | 'history' | null;
+export type ModalType = 'load-spec' | 'env-manager' | 'token-provider' | 'history' | 'saved-requests' | null;
 
 export interface AppState {
   specSource: string | null;

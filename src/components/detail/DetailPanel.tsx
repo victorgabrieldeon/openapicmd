@@ -29,6 +29,9 @@ export function DetailPanel({ height }: DetailPanelProps) {
     if (input === 'h') {
       dispatch({ type: 'OPEN_MODAL', modal: 'history' });
     }
+    if (input === 's') {
+      dispatch({ type: 'OPEN_MODAL', modal: 'saved-requests' });
+    }
   });
 
   if (!endpoint) {
@@ -58,7 +61,7 @@ export function DetailPanel({ height }: DetailPanelProps) {
 
       {isDetailFocused && (
         <Box paddingX={1} marginTop={1}>
-          <Text color="gray">{'[r] Execute request  [t] Token provider  [h] History'}</Text>
+          <Text color="gray">{'[r] Execute request  [t] Token  [h] History  [s] Saved'}</Text>
         </Box>
       )}
     </Box>
