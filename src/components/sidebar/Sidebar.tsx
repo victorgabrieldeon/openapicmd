@@ -107,11 +107,17 @@ export function Sidebar({ height }: SidebarProps) {
       }
       // Up/Down still navigate the list while searching
       if (key.upArrow) {
-        dispatch({ type: 'SET_SIDEBAR_INDEX', index: Math.max(0, currentIndex - 1) });
+        const newIndex = Math.max(0, currentIndex - 1);
+        dispatch({ type: 'SET_SIDEBAR_INDEX', index: newIndex });
+        const item = flatItems[newIndex];
+        if (item?.type === 'endpoint') dispatch({ type: 'SELECT_ENDPOINT', id: item.endpointId });
         return;
       }
       if (key.downArrow) {
-        dispatch({ type: 'SET_SIDEBAR_INDEX', index: Math.min(totalItems - 1, currentIndex + 1) });
+        const newIndex = Math.min(totalItems - 1, currentIndex + 1);
+        dispatch({ type: 'SET_SIDEBAR_INDEX', index: newIndex });
+        const item = flatItems[newIndex];
+        if (item?.type === 'endpoint') dispatch({ type: 'SELECT_ENDPOINT', id: item.endpointId });
         return;
       }
       if (key.return) {
@@ -137,9 +143,15 @@ export function Sidebar({ height }: SidebarProps) {
       return;
     }
     if (key.upArrow) {
-      dispatch({ type: 'SET_SIDEBAR_INDEX', index: Math.max(0, currentIndex - 1) });
+      const newIndex = Math.max(0, currentIndex - 1);
+      dispatch({ type: 'SET_SIDEBAR_INDEX', index: newIndex });
+      const item = flatItems[newIndex];
+      if (item?.type === 'endpoint') dispatch({ type: 'SELECT_ENDPOINT', id: item.endpointId });
     } else if (key.downArrow) {
-      dispatch({ type: 'SET_SIDEBAR_INDEX', index: Math.min(totalItems - 1, currentIndex + 1) });
+      const newIndex = Math.min(totalItems - 1, currentIndex + 1);
+      dispatch({ type: 'SET_SIDEBAR_INDEX', index: newIndex });
+      const item = flatItems[newIndex];
+      if (item?.type === 'endpoint') dispatch({ type: 'SELECT_ENDPOINT', id: item.endpointId });
     } else if (key.return) {
       const item = flatItems[currentIndex];
       if (!item) return;
