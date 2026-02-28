@@ -420,7 +420,9 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
   const [lookupPickerIdx, setLookupPickerIdx] = useState(0);
   const [lookupFetching, setLookupFetching] = useState(false);
   const [lookupError, setLookupError] = useState('');
-  const [lookupSetupQueryParams, setLookupSetupQueryParams] = useState('');
+  const [lookupSetupQueryParamValues, setLookupSetupQueryParamValues] = useState<Record<string, string>>({});
+  const [lookupSetupQueryParamFocus, setLookupSetupQueryParamFocus] = useState(0);
+  const [lookupSetupQueryParamEditing, setLookupSetupQueryParamEditing] = useState(false);
   const [lookupSetupBody, setLookupSetupBody] = useState('');
   const [lookupSetupSaveName, setLookupSetupSaveName] = useState('');
   const [lookupSetupSourceIdx, setLookupSetupSourceIdx] = useState(0);
@@ -833,21 +835,61 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
         if (key.downArrow) { setLookupSetupEndpointIdx((i) => Math.min(Math.max(0, filtered.length - 1), i + 1)); return; }
         if (key.return) {
           const ep = filtered[lookupSetupEndpointIdx];
-          if (ep) { setLookupSetupEndpointId(ep.id); setLookupSetupQueryParams(''); setLookupSetupStep('query-params'); }
+          if (ep) {
+            setLookupSetupEndpointId(ep.id);
+            // Pre-fill query params from spec defaults/examples
+            const qpValues: Record<string, string> = {};
+            for (const p of ep.parameters.filter((pp) => pp.in === 'query')) {
+              qpValues[p.name] = p.default ?? (p.schema?.['example'] !== undefined ? String(p.schema['example']) : '');
+            }
+            setLookupSetupQueryParamValues(qpValues);
+            setLookupSetupQueryParamFocus(0);
+            setLookupSetupQueryParamEditing(false);
+            setLookupSetupStep('query-params');
+          }
           return;
         }
         return;
       }
 
       if (lookupSetupStep === 'query-params') {
-        if (key.escape) { setLookupSetupStep('endpoint'); return; }
-        if (key.return) {
-          const ep = allEndpoints.find((e) => e.id === lookupSetupEndpointId);
-          setLookupSetupBody('');
-          setLookupSetupStep(ep?.requestBody ? 'body' : 'value-path');
+        const ep = allEndpoints.find((e) => e.id === lookupSetupEndpointId);
+        const qParams = ep?.parameters.filter((p) => p.in === 'query') ?? [];
+
+        const advanceFromQueryParams = () => {
+          // Pre-fill body skeleton from spec when moving to body step
+          if (ep?.requestBody?.schema) {
+            const bFields = extractBodyFields(ep.requestBody.schema);
+            const bValues = buildInitialFieldValues(bFields, ep.requestBody.schema);
+            const skeleton = serializeBodyFields(bFields, bValues, new Set());
+            setLookupSetupBody(skeleton);
+          } else {
+            setLookupSetupBody('');
+          }
           setLookupSetupValuePath('');
+          setLookupSetupStep(ep?.requestBody ? 'body' : 'value-path');
+        };
+
+        if (lookupSetupQueryParamEditing) {
+          if (key.return) {
+            setLookupSetupQueryParamEditing(false);
+            // Advance focus to next param or leave at last
+            setLookupSetupQueryParamFocus((i) => Math.min(qParams.length - 1, i + 1));
+            return;
+          }
+          if (key.escape) { setLookupSetupQueryParamEditing(false); return; }
+          return; // TextInput handles character input
+        }
+
+        if (key.escape) { setLookupSetupStep('endpoint'); return; }
+        if (key.upArrow) { setLookupSetupQueryParamFocus((i) => Math.max(0, i - 1)); return; }
+        if (key.downArrow) { setLookupSetupQueryParamFocus((i) => Math.min(Math.max(0, qParams.length - 1), i + 1)); return; }
+        if (key.return) {
+          if (qParams.length === 0) { advanceFromQueryParams(); return; }
+          setLookupSetupQueryParamEditing(true);
           return;
         }
+        if (key.tab) { advanceFromQueryParams(); return; }
         return;
       }
 
@@ -878,15 +920,14 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
         if (key.return) {
           const ep = allEndpoints.find((e) => e.id === lookupSetupEndpointId);
           if (ep) {
-            let qp: Record<string, string> | undefined;
-            if (lookupSetupQueryParams.trim()) {
-              try { qp = JSON.parse(lookupSetupQueryParams) as Record<string, string>; } catch { /* ignore */ }
-            }
+            const filledQp = Object.fromEntries(
+              Object.entries(lookupSetupQueryParamValues).filter(([, v]) => v.trim() !== '')
+            );
             const lookup: FieldLookup = {
               endpointId: ep.id, method: ep.method, path: ep.path,
               valuePath: lookupSetupValuePath.trim(),
               labelPath: lookupSetupLabelPath.trim() || undefined,
-              queryParams: qp,
+              queryParams: Object.keys(filledQp).length > 0 ? filledQp : undefined,
               body: lookupSetupBody.trim() || undefined,
             };
             if (lookupSetupSaveName.trim()) {
@@ -1241,7 +1282,9 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
       setLookupSetupFilter('');
       setLookupSetupEndpointIdx(0);
       setLookupSetupEndpointId('');
-      setLookupSetupQueryParams('');
+      setLookupSetupQueryParamValues({});
+      setLookupSetupQueryParamFocus(0);
+      setLookupSetupQueryParamEditing(false);
       setLookupSetupBody('');
       setLookupSetupValuePath('');
       setLookupSetupLabelPath('');
@@ -1915,42 +1958,62 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
         )}
 
         {/* ── query-params ── */}
-        {lookupSetupStep === 'query-params' && (
-          <Box flexDirection="column" marginTop={1}>
-            {selectedEp && selectedEp.parameters.filter((p) => p.in === 'query').length > 0 && (
-              <Text color="gray" dimColor>{
-                `  known params: ${selectedEp.parameters.filter((p) => p.in === 'query').map((p) => p.name).join(', ')}`
-              }</Text>
-            )}
-            <Box marginTop={1}>
-              <Text color="gray">{'Query params '}<Text dimColor>{'(JSON object, optional — e.g. {"status":"ATIVO"})'}</Text></Text>
+        {lookupSetupStep === 'query-params' && (() => {
+          const qParams = selectedEp?.parameters.filter((p) => p.in === 'query') ?? [];
+          return (
+            <Box flexDirection="column" marginTop={1}>
+              {qParams.length === 0 ? (
+                <Text color="gray">{'  (this endpoint has no query params)'}</Text>
+              ) : (
+                qParams.map((p, i) => {
+                  const isFoc = i === lookupSetupQueryParamFocus;
+                  const isEdit = isFoc && lookupSetupQueryParamEditing;
+                  const val = lookupSetupQueryParamValues[p.name] ?? '';
+                  const placeholder = p.default ?? p.type;
+                  const labelColor = isEdit ? 'green' : isFoc ? 'cyan' : 'gray';
+                  return (
+                    <Box key={p.name}>
+                      <Text color={labelColor}>
+                        {isFoc ? '  ▶ ' : '    '}{p.name}{p.required ? <Text color="red">{'*'}</Text> : ''}{': '}
+                      </Text>
+                      {isEdit ? (
+                        <TextInput
+                          value={val}
+                          onChange={(v) => setLookupSetupQueryParamValues((prev) => ({ ...prev, [p.name]: v }))}
+                          focus
+                          placeholder={placeholder}
+                        />
+                      ) : (
+                        val
+                          ? <Text color="white">{val}</Text>
+                          : <Text color="gray" dimColor>{placeholder}</Text>
+                      )}
+                    </Box>
+                  );
+                })
+              )}
+              <Box marginTop={1}>
+                <Text color="gray">{
+                  lookupSetupQueryParamEditing
+                    ? '[Enter] next field  [Esc] cancel edit'
+                    : '[↑↓] nav  [Enter] edit  [Tab] proceed  [Esc] back'
+                }</Text>
+              </Box>
             </Box>
-            <Box>
-              <Text color="cyan">{'  → '}</Text>
-              <TextInput
-                value={lookupSetupQueryParams}
-                onChange={setLookupSetupQueryParams}
-                focus
-                placeholder='{"status": "ATIVO"}  (leave empty to skip)'
-              />
-            </Box>
-            <Box marginTop={1}>
-              <Text color="gray">{'[Enter] next  [Esc] back'}</Text>
-            </Box>
-          </Box>
-        )}
+          );
+        })()}
 
         {/* ── body ── */}
         {lookupSetupStep === 'body' && (
           <Box flexDirection="column" marginTop={1}>
-            <Text color="gray">{'Request body '}<Text dimColor>{'(JSON, optional)'}</Text></Text>
+            <Text color="gray">{'Request body '}<Text dimColor>{'(pre-filled from spec — edit as needed, clear to send empty)'}</Text></Text>
             <Box>
               <Text color="cyan">{'  → '}</Text>
               <TextInput
                 value={lookupSetupBody}
                 onChange={setLookupSetupBody}
                 focus
-                placeholder='{"tipo": "ATIVO"}  (leave empty to skip)'
+                placeholder='{"campo": "valor"}'
               />
             </Box>
             <Box marginTop={1}>
