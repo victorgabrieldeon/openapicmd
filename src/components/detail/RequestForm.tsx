@@ -1899,10 +1899,7 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
         {/* Column header */}
         {colCount > 0 && (
           <Box marginTop={1}>
-            <Text color="gray">{'    ' + padTo('value', valWidth)}</Text>
-            {displayPaths.map((dp, ci) => (
-              <Text key={ci} color="gray">{`  │ ${padTo(pathLastKey(dp), colWidths[ci] ?? 10)}`}</Text>
-            ))}
+            <Text color="gray" wrap="truncate">{'    ' + padTo('value', valWidth) + displayPaths.map((dp, ci) => `  │ ${padTo(pathLastKey(dp), colWidths[ci] ?? 10)}`).join('')}</Text>
           </Box>
         )}
         <Box flexDirection="column" marginTop={colCount > 0 ? 0 : 1}>
@@ -1911,15 +1908,12 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
           ) : (
             lookupPickerItems.map((item, i) => {
               const sel = i === lookupPickerIdx;
+              const rowText = (sel ? '  ▶ ' : '    ')
+                + (colCount > 0 ? padTo(item.value, valWidth) : item.value)
+                + item.cols.map((col, ci) => `  │ ${padTo(col, colWidths[ci] ?? 28)}`).join('');
               return (
                 <Box key={i}>
-                  <Text backgroundColor={sel ? 'cyan' : undefined}>
-                    <Text color={sel ? 'black' : 'gray'}>{sel ? '  ▶ ' : '    '}</Text>
-                    <Text color={sel ? 'black' : 'white'}>{colCount > 0 ? padTo(item.value, valWidth) : item.value}</Text>
-                    {item.cols.map((col, ci) => (
-                      <Text key={ci} color={sel ? 'black' : 'gray'}>{`  │ ${padTo(col, colWidths[ci] ?? 28)}`}</Text>
-                    ))}
-                  </Text>
+                  <Text backgroundColor={sel ? 'cyan' : undefined} color={sel ? 'black' : 'white'} wrap="truncate">{rowText}</Text>
                 </Box>
               );
             })
