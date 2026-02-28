@@ -967,7 +967,12 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
       </Box>
 
       {result && (
-        <ResponseView result={result} height={responseHeight} onFullView={() => setTreeMode(true)} />
+        <ResponseView
+          result={result}
+          height={responseHeight}
+          onFullView={() => setTreeMode(true)}
+          onRepeat={() => { void handleSubmit(); }}
+        />
       )}
     </Box>
   );

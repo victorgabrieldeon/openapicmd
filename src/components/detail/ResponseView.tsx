@@ -8,6 +8,7 @@ interface ResponseViewProps {
   height?: number;
   isFocused?: boolean;
   onFullView?: () => void;
+  onRepeat?: () => void;
 }
 
 function formatBody(body: unknown): string {
@@ -20,19 +21,31 @@ function formatBody(body: unknown): string {
   }
 }
 
-export function ResponseView({ result, height = 12, isFocused = true, onFullView }: ResponseViewProps) {
-  const [copyState, setCopyState] = useState<'idle' | 'ok' | 'fail'>('idle');
+export function ResponseView({ result, height = 12, isFocused = true, onFullView, onRepeat }: ResponseViewProps) {
+  const [copyState, setCopyState] = useState<'idle' | 'ok' | 'fail' | 'body-ok' | 'body-fail'>('idle');
 
-  const handleCopy = useCallback(async () => {
+  const handleCopyCurl = useCallback(async () => {
     if (!result.curlCommand) return;
     const ok = await copyToClipboard(result.curlCommand);
     setCopyState(ok ? 'ok' : 'fail');
     setTimeout(() => setCopyState('idle'), 2000);
   }, [result.curlCommand]);
 
+  const handleCopyBody = useCallback(async () => {
+    if (result.body === null || result.body === undefined) return;
+    const text = typeof result.body === 'string'
+      ? result.body
+      : JSON.stringify(result.body, null, 2);
+    const ok = await copyToClipboard(text);
+    setCopyState(ok ? 'body-ok' : 'body-fail');
+    setTimeout(() => setCopyState('idle'), 2000);
+  }, [result.body]);
+
   useInput((input, key) => {
     if (!isFocused) return;
-    if (input === 'c' && result.curlCommand) { void handleCopy(); return; }
+    if (input === 'c' && result.curlCommand) { void handleCopyCurl(); return; }
+    if (input === 'b' && result.body !== null && result.body !== undefined) { void handleCopyBody(); return; }
+    if (input === 'r' && onRepeat) { onRepeat(); return; }
     if (input === 'f' && onFullView && !result.error) { onFullView(); return; }
   });
 
@@ -60,11 +73,15 @@ export function ResponseView({ result, height = 12, isFocused = true, onFullView
           <Text color="gray">{` — ${result.durationMs}ms`}</Text>
         </Box>
         <Box>
-          {copyState === 'ok' && <Text color="green">{'✓ Copied!'}</Text>}
+          {copyState === 'ok' && <Text color="green">{'✓ cURL copied!'}</Text>}
           {copyState === 'fail' && <Text color="red">{'✗ Copy failed'}</Text>}
+          {copyState === 'body-ok' && <Text color="green">{'✓ Body copied!'}</Text>}
+          {copyState === 'body-fail' && <Text color="red">{'✗ Copy failed'}</Text>}
           {copyState === 'idle' && (
             <Box>
-              {!result.error && onFullView && <Text color="gray">{'[f] Full view  '}</Text>}
+              {!result.error && onFullView && <Text color="gray">{'[f] full  '}</Text>}
+              {onRepeat && <Text color="gray">{'[r] repeat  '}</Text>}
+              {result.body !== null && result.body !== undefined && !result.error && <Text color="gray">{'[b] body  '}</Text>}
               {result.curlCommand && <Text color="gray">{'[c] cURL'}</Text>}
             </Box>
           )}

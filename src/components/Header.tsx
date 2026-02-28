@@ -15,6 +15,7 @@ export function Header() {
     : 'No spec';
 
   const envLabel = activeEnv ? activeEnv.name : 'No env';
+  const varCount = activeEnv ? Object.keys(activeEnv.variables).length : 0;
   const title = state.spec?.title ? ` | ${state.spec.title} v${state.spec.version}` : '';
 
   const hasProvider = Boolean(activeEnv?.tokenProvider);
@@ -31,6 +32,9 @@ export function Header() {
         <Text>{specLabel}</Text>
         <Text color="yellow">{'  Env: '}</Text>
         <Text color={activeEnv ? 'green' : 'gray'}>{envLabel}</Text>
+        {varCount > 0 && (
+          <Text color="cyan">{` (${varCount} var${varCount === 1 ? '' : 's'})`}</Text>
+        )}
         {hasProvider && (
           <Text>
             <Text color="gray">{'  '}</Text>

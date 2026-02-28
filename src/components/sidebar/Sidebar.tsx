@@ -19,6 +19,7 @@ export function Sidebar({ height }: SidebarProps) {
   const isFocused = state.activePanel === 'sidebar';
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [methodFilter, setMethodFilter] = useState<string | null>(null);
   const searchActive = state.sidebarSearchActive;
   const setSearchActive = (active: boolean) =>
     dispatch({ type: 'SET_SIDEBAR_SEARCH', active });
@@ -44,24 +45,26 @@ export function Sidebar({ height }: SidebarProps) {
     return items;
   }, [state.tagGroups]);
 
-  // Filter by search query — tags only shown when they have matching children
+  // Filter by search query + method filter — tags only shown when they have matching children
   const flatItems = useMemo<FlatItem[]>(() => {
-    if (!searchQuery.trim()) return allFlatItems;
-    const q = searchQuery.toLowerCase();
+    const q = searchQuery.trim().toLowerCase();
+    const mf = methodFilter;
+    if (!q && !mf) return allFlatItems;
 
-    // Collect matching endpoint IDs and their tags
     const matchingTags = new Set<string>();
     const filteredItems: FlatItem[] = [];
 
     // First pass: find all matching endpoints
     for (const item of allFlatItems) {
       if (item.type === 'endpoint') {
-        const matches =
+        const methodMatch = !mf || item.method.toLowerCase() === mf;
+        const textMatch = !q || (
           item.path.toLowerCase().includes(q) ||
           item.method.toLowerCase().includes(q) ||
           (item.summary?.toLowerCase().includes(q) ?? false) ||
-          item.tagName.toLowerCase().includes(q);
-        if (matches) matchingTags.add(item.tagName);
+          item.tagName.toLowerCase().includes(q)
+        );
+        if (methodMatch && textMatch) matchingTags.add(item.tagName);
       }
     }
 
@@ -70,17 +73,19 @@ export function Sidebar({ height }: SidebarProps) {
       if (item.type === 'tag') {
         if (matchingTags.has(item.tagName)) filteredItems.push(item);
       } else {
-        const matches =
+        const methodMatch = !mf || item.method.toLowerCase() === mf;
+        const textMatch = !q || (
           item.path.toLowerCase().includes(q) ||
           item.method.toLowerCase().includes(q) ||
           (item.summary?.toLowerCase().includes(q) ?? false) ||
-          item.tagName.toLowerCase().includes(q);
-        if (matches) filteredItems.push(item);
+          item.tagName.toLowerCase().includes(q)
+        );
+        if (methodMatch && textMatch) filteredItems.push(item);
       }
     }
 
     return filteredItems;
-  }, [allFlatItems, searchQuery]);
+  }, [allFlatItems, searchQuery, methodFilter]);
 
   const totalItems = flatItems.length;
   // height - 1 (title) - 1 (search bar) - 1 padding
@@ -103,6 +108,7 @@ export function Sidebar({ height }: SidebarProps) {
       if (key.escape) {
         setSearchQuery('');
         setSearchActive(false);
+        if (methodFilter) setMethodFilter(null);
         return;
       }
       // Up/Down still navigate the list while searching
@@ -163,13 +169,27 @@ export function Sidebar({ height }: SidebarProps) {
       }
     } else if (input === 'r' && state.selectedEndpointId) {
       dispatch({ type: 'SET_ACTIVE_PANEL', panel: 'request' });
+    } else if (input === 'g') {
+      setMethodFilter((f) => f === 'get' ? null : 'get');
+      dispatch({ type: 'SET_SIDEBAR_INDEX', index: 0 });
+    } else if (input === 'p') {
+      setMethodFilter((f) => f === 'post' ? null : 'post');
+      dispatch({ type: 'SET_SIDEBAR_INDEX', index: 0 });
+    } else if (input === 'u') {
+      setMethodFilter((f) => f === 'put' ? null : 'put');
+      dispatch({ type: 'SET_SIDEBAR_INDEX', index: 0 });
+    } else if (input === 'd') {
+      setMethodFilter((f) => f === 'delete' ? null : 'delete');
+      dispatch({ type: 'SET_SIDEBAR_INDEX', index: 0 });
+    } else if (input === 'x') {
+      setMethodFilter((f) => f === 'patch' ? null : 'patch');
+      dispatch({ type: 'SET_SIDEBAR_INDEX', index: 0 });
     }
   });
 
   const endpointCount = state.spec?.endpoints.length ?? 0;
-  const matchCount = searchQuery
-    ? flatItems.filter((i) => i.type === 'endpoint').length
-    : endpointCount;
+  const filteredCount = flatItems.filter((i) => i.type === 'endpoint').length;
+  const isFiltered = Boolean(searchQuery || methodFilter);
 
   if (!state.spec) {
     return (
@@ -182,11 +202,16 @@ export function Sidebar({ height }: SidebarProps) {
   return (
     <Box flexDirection="column" paddingX={1}>
       {/* Title */}
-      <Text bold color={isFocused ? 'cyan' : 'white'}>
-        {searchQuery
-          ? `ENDPOINTS (${matchCount}/${endpointCount})`
-          : `ENDPOINTS (${endpointCount})`}
-      </Text>
+      <Box>
+        <Text bold color={isFocused ? 'cyan' : 'white'}>
+          {isFiltered
+            ? `ENDPOINTS (${filteredCount}/${endpointCount})`
+            : `ENDPOINTS (${endpointCount})`}
+        </Text>
+        {methodFilter && (
+          <Text color="cyan" bold>{` [${methodFilter.toUpperCase()}]`}</Text>
+        )}
+      </Box>
 
       {/* Search bar */}
       <Box>
