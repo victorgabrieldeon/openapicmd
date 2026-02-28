@@ -7,7 +7,7 @@ import type { Environment } from '../../types/config.js';
 import type { RequestValues } from '../../lib/executor.js';
 import { useRequest } from '../../hooks/useRequest.js';
 import { ResponseView } from './ResponseView.js';
-import { JsonTree } from './JsonTree.js';
+import { JsonTree, treePathToLookupPath } from './JsonTree.js';
 import { hasTokenCached } from '../../lib/executor.js';
 import { useApp, useActiveEnvironment } from '../../context/AppContext.js';
 import { saveRequest } from '../../lib/saved-requests.js';
@@ -420,6 +420,10 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
   const [lookupPickerIdx, setLookupPickerIdx] = useState(0);
   const [lookupFetching, setLookupFetching] = useState(false);
   const [lookupError, setLookupError] = useState('');
+  // Setup wizard fetch state (separate from the picker fetch above)
+  const [lookupSetupResponseBody, setLookupSetupResponseBody] = useState<unknown>(null);
+  const [lookupSetupFetching, setLookupSetupFetching] = useState(false);
+  const [lookupSetupFetchError, setLookupSetupFetchError] = useState('');
   const [lookupSetupQueryParamValues, setLookupSetupQueryParamValues] = useState<Record<string, string>>({});
   const [lookupSetupQueryParamFocus, setLookupSetupQueryParamFocus] = useState(0);
   const [lookupSetupQueryParamEditing, setLookupSetupQueryParamEditing] = useState(false);
@@ -856,18 +860,41 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
         const ep = allEndpoints.find((e) => e.id === lookupSetupEndpointId);
         const qParams = ep?.parameters.filter((p) => p.in === 'query') ?? [];
 
+        const goToValuePath = () => {
+          // Fetch the endpoint and show response tree for path selection
+          setLookupSetupResponseBody(null);
+          setLookupSetupFetchError('');
+          setLookupSetupFetching(true);
+          setLookupSetupValuePath('');
+          setLookupSetupStep('value-path');
+          const filledQp = Object.fromEntries(
+            Object.entries(lookupSetupQueryParamValues).filter(([, v]) => v.trim() !== '')
+          );
+          void executeRequest(
+            ep!,
+            { pathParams: {}, queryParams: filledQp, headers: {}, body: lookupSetupBody.trim() },
+            liveEnv, liveEnv?.baseUrl ?? env?.baseUrl ?? ''
+          ).then((result) => {
+            setLookupSetupFetching(false);
+            if (result.error || result.body === null || result.body === undefined) {
+              setLookupSetupFetchError(result.error ?? 'Empty response');
+            } else {
+              setLookupSetupResponseBody(result.body);
+            }
+          });
+        };
+
         const advanceFromQueryParams = () => {
-          // Pre-fill body skeleton from spec when moving to body step
+          // Pre-fill body skeleton from spec, then go to body step (or directly fetch)
           if (ep?.requestBody?.schema) {
             const bFields = extractBodyFields(ep.requestBody.schema);
             const bValues = buildInitialFieldValues(bFields, ep.requestBody.schema);
             const skeleton = serializeBodyFields(bFields, bValues, new Set());
             setLookupSetupBody(skeleton);
+            setLookupSetupStep('body');
           } else {
-            setLookupSetupBody('');
+            goToValuePath();
           }
-          setLookupSetupValuePath('');
-          setLookupSetupStep(ep?.requestBody ? 'body' : 'value-path');
         };
 
         if (lookupSetupQueryParamEditing) {
@@ -894,24 +921,50 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
       }
 
       if (lookupSetupStep === 'body') {
+        const ep = allEndpoints.find((e) => e.id === lookupSetupEndpointId);
+        const goToValuePath = () => {
+          setLookupSetupResponseBody(null);
+          setLookupSetupFetchError('');
+          setLookupSetupFetching(true);
+          setLookupSetupValuePath('');
+          setLookupSetupStep('value-path');
+          const filledQp = Object.fromEntries(
+            Object.entries(lookupSetupQueryParamValues).filter(([, v]) => v.trim() !== '')
+          );
+          void executeRequest(
+            ep!,
+            { pathParams: {}, queryParams: filledQp, headers: {}, body: lookupSetupBody.trim() },
+            liveEnv, liveEnv?.baseUrl ?? env?.baseUrl ?? ''
+          ).then((result) => {
+            setLookupSetupFetching(false);
+            if (result.error || result.body === null || result.body === undefined) {
+              setLookupSetupFetchError(result.error ?? 'Empty response');
+            } else {
+              setLookupSetupResponseBody(result.body);
+            }
+          });
+        };
         if (key.escape) { setLookupSetupStep('query-params'); return; }
-        if (key.return) { setLookupSetupValuePath(''); setLookupSetupStep('value-path'); return; }
+        if (key.return) { goToValuePath(); return; }
         return;
       }
 
       if (lookupSetupStep === 'value-path') {
-        if (key.escape) {
-          const ep = allEndpoints.find((e) => e.id === lookupSetupEndpointId);
-          setLookupSetupStep(ep?.requestBody ? 'body' : 'query-params');
+        // When fetching or error, handle Esc to go back; otherwise JsonTree handles all input
+        if (lookupSetupFetching || lookupSetupFetchError) {
+          if (key.escape) {
+            const ep = allEndpoints.find((e) => e.id === lookupSetupEndpointId);
+            setLookupSetupFetching(false);
+            setLookupSetupStep(ep?.requestBody ? 'body' : 'query-params');
+          }
           return;
         }
-        if (key.return && lookupSetupValuePath.trim()) { setLookupSetupLabelPath(''); setLookupSetupStep('label-path'); return; }
+        // Response loaded → JsonTree handles input via onSelect/onClose callbacks
         return;
       }
 
       if (lookupSetupStep === 'label-path') {
-        if (key.escape) { setLookupSetupStep('value-path'); return; }
-        if (key.return) { setLookupSetupSaveName(''); setLookupSetupStep('save-name'); return; }
+        // JsonTree handles input via onSelect/onClose callbacks
         return;
       }
 
@@ -1286,6 +1339,9 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
       setLookupSetupQueryParamFocus(0);
       setLookupSetupQueryParamEditing(false);
       setLookupSetupBody('');
+      setLookupSetupResponseBody(null);
+      setLookupSetupFetching(false);
+      setLookupSetupFetchError('');
       setLookupSetupValuePath('');
       setLookupSetupLabelPath('');
       setLookupSetupSaveName('');
@@ -2022,41 +2078,61 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
           </Box>
         )}
 
-        {/* ── value-path ── */}
+        {/* ── value-path ── navigate real response to select path ── */}
         {lookupSetupStep === 'value-path' && (
           <Box flexDirection="column" marginTop={1}>
-            <Text color="gray">{'Value path '}<Text dimColor>{'(e.g. fields[].id  or  [].uuid  or  data.items[].id)'}</Text></Text>
-            <Box>
-              <Text color="cyan">{'  → '}</Text>
-              <TextInput
-                value={lookupSetupValuePath}
-                onChange={setLookupSetupValuePath}
-                focus
-                placeholder="fields[].id"
-              />
-            </Box>
-            <Box marginTop={1}>
-              <Text color="gray">{'[Enter] next  [Esc] back'}</Text>
-            </Box>
+            {lookupSetupFetching ? (
+              <Box>
+                <Text color="cyan"><Spinner type="dots" /></Text>
+                <Text color="gray">{' Fetching response...'}</Text>
+              </Box>
+            ) : lookupSetupFetchError ? (
+              <Box flexDirection="column">
+                <Text color="red">{`✗ ${lookupSetupFetchError}`}</Text>
+                <Text color="gray">{'[Esc] go back and adjust query params / body'}</Text>
+              </Box>
+            ) : (
+              <Box flexDirection="column">
+                <Text color="gray">{'Navigate to the field with the ID/value and press '}<Text color="cyan">{'[Enter]'}</Text>{' to select:'}</Text>
+                <JsonTree
+                  body={lookupSetupResponseBody}
+                  height={height - 5}
+                  isFocused
+                  onClose={() => {
+                    const ep = allEndpoints.find((e) => e.id === lookupSetupEndpointId);
+                    setLookupSetupStep(ep?.requestBody ? 'body' : 'query-params');
+                  }}
+                  onSelect={(path) => {
+                    setLookupSetupValuePath(path);
+                    setLookupSetupLabelPath('');
+                    setLookupSetupStep('label-path');
+                  }}
+                />
+              </Box>
+            )}
           </Box>
         )}
 
-        {/* ── label-path ── */}
+        {/* ── label-path ── same tree, pick display label ── */}
         {lookupSetupStep === 'label-path' && (
           <Box flexDirection="column" marginTop={1}>
-            <Text color="gray">{'Display label '}<Text dimColor>{'(optional — shown beside value in picker, e.g. fields[].nome)'}</Text></Text>
-            <Box>
-              <Text color="cyan">{'  → '}</Text>
-              <TextInput
-                value={lookupSetupLabelPath}
-                onChange={setLookupSetupLabelPath}
-                focus
-                placeholder="fields[].nome  (leave empty to skip)"
-              />
-            </Box>
-            <Box marginTop={1}>
-              <Text color="gray">{'[Enter] next  [Esc] back'}</Text>
-            </Box>
+            <Text color="gray">{'Value path: '}<Text color="green">{lookupSetupValuePath}</Text></Text>
+            <Text color="gray">{'Now navigate to a display label field (e.g. name/nome) and press '}<Text color="cyan">{'[Enter]'}</Text>{', or '}<Text color="gray">{'[Esc]'}</Text>{' to skip:'}</Text>
+            <JsonTree
+              body={lookupSetupResponseBody}
+              height={height - 6}
+              isFocused
+              onClose={() => {
+                setLookupSetupLabelPath('');
+                setLookupSetupSaveName('');
+                setLookupSetupStep('save-name');
+              }}
+              onSelect={(path) => {
+                setLookupSetupLabelPath(path);
+                setLookupSetupSaveName('');
+                setLookupSetupStep('save-name');
+              }}
+            />
           </Box>
         )}
 

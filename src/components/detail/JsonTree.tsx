@@ -92,14 +92,25 @@ function ValueLabel({ node, isCollapsed, isHighlighted }: {
     : <Text color={isHighlighted ? 'black' : 'gray'}>{'{'}</Text>;
 }
 
+/** Convert a JsonTree internal path ("root.fields[0].id") to a resolvePathArray
+ *  lookup path ("fields[].id"). Array indices are replaced with []. */
+export function treePathToLookupPath(treePath: string): string {
+  let p = treePath === 'root' ? '' :
+           treePath.startsWith('root.') ? treePath.slice(5) :
+           treePath.startsWith('root[') ? treePath.slice(4) : treePath;
+  return p.replace(/\[\d+\]/g, '[]');
+}
+
 interface JsonTreeProps {
   body: unknown;
   height: number;
   isFocused: boolean;
   onClose: () => void;
+  /** Called when the user presses Enter on a leaf node. Receives the lookup-format path. */
+  onSelect?: (path: string) => void;
 }
 
-export function JsonTree({ body, height, isFocused, onClose }: JsonTreeProps) {
+export function JsonTree({ body, height, isFocused, onClose, onSelect }: JsonTreeProps) {
   const { dispatch } = useApp();
   const activeEnv = useActiveEnvironment();
 
@@ -269,7 +280,11 @@ export function JsonTree({ body, height, isFocused, onClose }: JsonTreeProps) {
     if (!node) return;
 
     if (key.return || input === ' ') {
-      if (node.isExpandable) toggleCollapse(node.path);
+      if (node.isExpandable) {
+        toggleCollapse(node.path);
+      } else if (onSelect && key.return) {
+        onSelect(treePathToLookupPath(node.path));
+      }
       return;
     }
     if (key.leftArrow) {
@@ -356,6 +371,17 @@ export function JsonTree({ body, height, isFocused, onClose }: JsonTreeProps) {
         <Text color="gray">{'  [n] next  [N] prev  [/] new search  [Esc] clear'}</Text>
         {activeEnv && <Text color="gray">{'  [v] capture'}</Text>}
         <Text color="gray">{'  [Esc×2] close'}</Text>
+      </Box>
+    );
+  } else if (onSelect) {
+    const isLeaf = currentNode && !currentNode.isExpandable;
+    hintBar = (
+      <Box>
+        <Text color="gray">{'  [↑↓] move  [Space] toggle  [←] collapse  [→] expand  [/] search'}</Text>
+        {isLeaf
+          ? <Text color="cyan">{'  [Enter] select path'}</Text>
+          : <Text color="gray">{'  (navigate to a value to select)'}</Text>}
+        <Text color="gray">{'  [Esc] back'}</Text>
       </Box>
     );
   } else {
