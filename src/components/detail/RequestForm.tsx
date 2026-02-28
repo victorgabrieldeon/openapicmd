@@ -11,6 +11,7 @@ import { JsonTree } from './JsonTree.js';
 import { hasTokenCached } from '../../lib/executor.js';
 import { useApp, useActiveEnvironment } from '../../context/AppContext.js';
 import { saveRequest } from '../../lib/saved-requests.js';
+import { FAKER_ENTRIES } from '../../lib/faker.js';
 
 interface RequestFormProps {
   endpoint: Endpoint;
@@ -360,6 +361,9 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
   const [saveName, setSaveName] = useState('');
   const [varPickerOpen, setVarPickerOpen] = useState(false);
   const [varPickerIdx, setVarPickerIdx] = useState(0);
+  const [fakerOpen, setFakerOpen] = useState(false);
+  const [fakerIdx, setFakerIdx] = useState(0);
+  const [fakerValues, setFakerValues] = useState<Record<string, string>>({});
 
   // Navigation fields — group headers navigable as body-group:key, children skipped when group is collapsed
   const fields = useMemo(() => {
@@ -475,6 +479,20 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
     setSaveName('');
   }, [saveName, headersStr, bodyFieldDefs, bodyFieldValues, collapsedBodyGroups, pathValues, queryValues, endpoint, env]);
 
+  const insertFakerValue = useCallback((value: string) => {
+    const f = focusedField;
+    if (f.startsWith('body:')) {
+      const fKey = f.slice(5);
+      setBodyFieldValues((prev) => ({ ...prev, [fKey]: value }));
+    } else if (f.startsWith('path:')) {
+      setPathValues((prev) => ({ ...prev, [f.slice(5)]: value }));
+    } else if (f.startsWith('query:')) {
+      setQueryValues((prev) => ({ ...prev, [f.slice(6)]: value }));
+    } else if (f === 'headers') {
+      setHeadersStr(value);
+    }
+  }, [focusedField]);
+
   const insertVar = useCallback((varName: string) => {
     const placeholder = `{{${varName}}}`;
     if (focusedField.startsWith('body:')) {
@@ -502,6 +520,30 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
         const entry = envVarEntries[varPickerIdx];
         if (entry) { insertVar(entry[0]); }
         setVarPickerOpen(false);
+        return;
+      }
+      return;
+    }
+
+    if (fakerOpen) {
+      if (key.escape) { setFakerOpen(false); return; }
+      if (key.upArrow) { setFakerIdx((i) => Math.max(0, i - 1)); return; }
+      if (key.downArrow) { setFakerIdx((i) => Math.min(FAKER_ENTRIES.length - 1, i + 1)); return; }
+      if (input === ' ') {
+        // Regenerate value for current type
+        const entry = FAKER_ENTRIES[fakerIdx];
+        if (entry) {
+          setFakerValues((prev) => ({ ...prev, [entry.id]: entry.generate() }));
+        }
+        return;
+      }
+      if (key.return) {
+        const entry = FAKER_ENTRIES[fakerIdx];
+        if (entry) {
+          const value = fakerValues[entry.id] ?? entry.generate();
+          insertFakerValue(value);
+        }
+        setFakerOpen(false);
         return;
       }
       return;
@@ -653,6 +695,18 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
     }
 
     if (key.escape) { onClose(); return; }
+    if (input === 'f') {
+      const field = focusedField;
+      if (field.startsWith('body:') || field.startsWith('path:') || field.startsWith('query:') || field === 'headers') {
+        // Pre-generate all values
+        const generated: Record<string, string> = {};
+        for (const entry of FAKER_ENTRIES) generated[entry.id] = entry.generate();
+        setFakerValues(generated);
+        setFakerIdx(0);
+        setFakerOpen(true);
+        return;
+      }
+    }
     if (input === 'v' && envVarEntries.length > 0) {
       const f = focusedField;
       if (f.startsWith('body:') || f.startsWith('path:') || f.startsWith('query:') || f === 'headers') {
@@ -764,6 +818,7 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
             : <Box>
                 <Text color="gray">{'[↑↓/Tab] navigate  [Enter] edit  [Ctrl+Enter] send  [s] save  [h] history  [Esc] close'}</Text>
                 {envVarEntries.length > 0 && <Text color="gray">{'  [v] vars'}</Text>}
+                <Text color="gray">{'  [f] faker'}</Text>
               </Box>
           }
           {saveMode && (
@@ -976,6 +1031,48 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
       )}
     </Box>
   );
+
+  if (fakerOpen) {
+    const targetLabel = focusedField.startsWith('body:') ? focusedField.slice(5)
+      : focusedField.startsWith('path:') ? `{${focusedField.slice(5)}}`
+      : focusedField.startsWith('query:') ? focusedField.slice(6)
+      : 'headers';
+
+    const categories = Array.from(new Set(FAKER_ENTRIES.map((e) => e.category)));
+
+    return (
+      <Box flexDirection="column" height={height} paddingX={1}>
+        <Box>
+          <Text bold color="cyan">{'FAKER  '}</Text>
+          <Text color="gray">{'inserting into '}</Text>
+          <Text color="white">{targetLabel}</Text>
+          <Text color="gray">{'  [↑↓] navigate  [Space] regenerate  [Enter] insert  [Esc] cancel'}</Text>
+        </Box>
+        <Box flexDirection="column">
+          {categories.map((cat) => (
+            <Box key={cat} flexDirection="column">
+              <Text color="gray">{`  ${cat}`}</Text>
+              {FAKER_ENTRIES.filter((e) => e.category === cat).map((entry) => {
+                const idx = FAKER_ENTRIES.indexOf(entry);
+                const sel = idx === fakerIdx;
+                const value = fakerValues[entry.id] ?? '';
+                const displayVal = value.length > 38 ? value.slice(0, 38) + '…' : value;
+                return (
+                  <Box key={entry.id}>
+                    <Text backgroundColor={sel ? 'cyan' : undefined}>
+                      <Text color={sel ? 'black' : 'gray'}>{sel ? '  ▶ ' : '    '}</Text>
+                      <Text color={sel ? 'black' : 'white'}>{entry.label.padEnd(22)}</Text>
+                      <Text color={sel ? 'black' : 'green'}>{`  ${displayVal}`}</Text>
+                    </Text>
+                  </Box>
+                );
+              })}
+            </Box>
+          ))}
+        </Box>
+      </Box>
+    );
+  }
 
   if (varPickerOpen) {
     const targetLabel = focusedField.startsWith('body:') ? focusedField.slice(5)
