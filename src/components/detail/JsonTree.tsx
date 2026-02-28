@@ -108,9 +108,14 @@ interface JsonTreeProps {
   onClose: () => void;
   /** Called when the user presses Enter on a leaf node. Receives the lookup-format path. */
   onSelect?: (path: string) => void;
+  /**
+   * Highlight already-selected paths with a badge.
+   * Key = lookup-format path (e.g. "fields[].id"), value = short label ("V", "1", "2"…).
+   */
+  markedPaths?: Record<string, string>;
 }
 
-export function JsonTree({ body, height, isFocused, onClose, onSelect }: JsonTreeProps) {
+export function JsonTree({ body, height, isFocused, onClose, onSelect, markedPaths }: JsonTreeProps) {
   const { dispatch } = useApp();
   const activeEnv = useActiveEnvironment();
 
@@ -410,6 +415,8 @@ export function JsonTree({ body, height, isFocused, onClose, onSelect }: JsonTre
             : '  ';
 
           const bg = isSelected ? 'cyan' : isMatch ? 'yellow' : undefined;
+          const lookupPath = markedPaths ? treePathToLookupPath(node.path) : null;
+          const mark = lookupPath !== null ? markedPaths?.[lookupPath] : undefined;
 
           return (
             <Box key={node.path + absIdx}>
@@ -421,6 +428,9 @@ export function JsonTree({ body, height, isFocused, onClose, onSelect }: JsonTre
                   : <Text color={isHighlighted ? 'black' : 'cyan'}>{'root'}</Text>}
                 <Text color={isHighlighted ? 'black' : 'gray'}>{': '}</Text>
                 <ValueLabel node={node} isCollapsed={isCollapsed} isHighlighted={isHighlighted} />
+                {mark !== undefined && (
+                  <Text color={mark === 'V' ? 'green' : 'cyan'}>{` [${mark === 'V' ? '■ V' : `■ ${mark}`}]`}</Text>
+                )}
               </Text>
             </Box>
           );

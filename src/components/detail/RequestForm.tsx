@@ -2125,6 +2125,7 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
                   body={lookupSetupResponseBody}
                   height={height - 5}
                   isFocused
+                  markedPaths={lookupSetupValuePath ? { [lookupSetupValuePath]: 'V' } : undefined}
                   onClose={() => {
                     const ep = allEndpoints.find((e) => e.id === lookupSetupEndpointId);
                     setLookupSetupStep(ep?.requestBody ? 'body' : 'query-params');
@@ -2143,21 +2144,28 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
         {/* ── columns ── pick multiple display columns from the same response ── */}
         {lookupSetupStep === 'columns' && (
           <Box flexDirection="column" marginTop={1}>
-            <Box>
-              <Text color="gray">{'Columns: '}</Text>
-              {lookupSetupDisplayPaths.length === 0
-                ? <Text color="gray" dimColor>{'none yet'}</Text>
-                : lookupSetupDisplayPaths.map((p, i) => (
-                    <Text key={i} color="cyan">{(i > 0 ? '  ' : '') + p}</Text>
-                  ))
-              }
-              {lookupSetupDisplayPaths.length > 0 && <Text color="gray">{'  [d] remove last'}</Text>}
+            <Box flexWrap="wrap">
+              <Text color="gray">{'[■ V] '}</Text>
+              <Text color="green">{lookupSetupValuePath}</Text>
+              {lookupSetupDisplayPaths.length > 0 && (
+                <>
+                  <Text color="gray">{'  columns: '}</Text>
+                  {lookupSetupDisplayPaths.map((p, i) => (
+                    <Text key={i} color="cyan">{`[■ ${i + 1}] ${p}  `}</Text>
+                  ))}
+                  <Text color="gray">{'[d] remove last'}</Text>
+                </>
+              )}
             </Box>
             <Text color="gray">{'Navigate to a display field and press '}<Text color="cyan">{'[Enter]'}</Text>{' to add column, '}<Text color="gray">{'[Esc]'}</Text>{' when done:'}</Text>
             <JsonTree
               body={lookupSetupResponseBody}
               height={height - 6}
               isFocused
+              markedPaths={{
+                ...(lookupSetupValuePath ? { [lookupSetupValuePath]: 'V' } : {}),
+                ...Object.fromEntries(lookupSetupDisplayPaths.map((p, i) => [p, String(i + 1)])),
+              }}
               onClose={() => {
                 setLookupSetupSaveName('');
                 setLookupSetupStep('save-name');
