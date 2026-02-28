@@ -34,6 +34,7 @@ type BodyFieldDef = {
   nullable: boolean;
   enumValues?: string[];  // enum constraint values
   format?: string;        // e.g. 'date-time', 'date', 'email'
+  example?: unknown;      // from OpenAPI spec
 };
 
 function fieldType(schema: Record<string, unknown>): string {
@@ -101,6 +102,9 @@ function extractBodyFields(
     // Format (date-time, date, email, etc.)
     const format = (effectiveSchema['format'] ?? fs['format']) as string | undefined;
 
+    // Spec example value
+    const example = effectiveSchema['example'] ?? fs['example'];
+
     const hasProps = Boolean(effectiveSchema['properties']) || Boolean(effectiveSchema['allOf']);
     const isObject = (effectiveSchema['type'] === 'object' || hasProps) && indent < maxDepth;
 
@@ -109,7 +113,7 @@ function extractBodyFields(
       fields.push({ label: name, fullKey, type, required: isRequired, description, indent, isGroupHeader: true, nullable, enumValues, format });
       fields.push(...extractBodyFields(effectiveSchema, fullKey, indent + 1, maxDepth));
     } else {
-      fields.push({ label: name, fullKey, type, required: isRequired, description, indent, isGroupHeader: false, nullable, enumValues, format });
+      fields.push({ label: name, fullKey, type, required: isRequired, description, indent, isGroupHeader: false, nullable, enumValues, format, example });
     }
   }
 
@@ -465,7 +469,7 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
     return p;
   }, [endpoint.path, pathValues]);
 
-  const handleSubmit = useCallback(async () => {
+  const handleSubmit = useCallback(async (queryOverrides?: Record<string, string>) => {
     setEditingField(null);
     let parsedHeaders: Record<string, string> = {};
     if (headersStr.trim()) {
@@ -476,7 +480,7 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
       : '';
     const values: RequestValues = {
       pathParams: pathValues,
-      queryParams: queryValues,
+      queryParams: queryOverrides ? { ...queryValues, ...queryOverrides } : queryValues,
       headers: parsedHeaders,
       body: bodyStr,
     };
@@ -504,6 +508,50 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
     setSaveMode(false);
     setSaveName('');
   }, [saveName, headersStr, bodyFieldDefs, bodyFieldValues, collapsedBodyGroups, pathValues, queryValues, endpoint, env]);
+
+  const handleNextUrl = useCallback((url: string) => {
+    try {
+      const urlObj = new URL(url);
+      const newParams: Record<string, string> = {};
+      urlObj.searchParams.forEach((v, k) => { newParams[k] = v; });
+      setQueryValues((prev) => ({ ...prev, ...newParams }));
+      void handleSubmit(newParams);
+    } catch { /* invalid URL */ }
+  }, [handleSubmit]);
+
+  const handleNextCursor = useCallback((param: string, value: string) => {
+    const override = { [param]: value };
+    setQueryValues((prev) => ({ ...prev, ...override }));
+    void handleSubmit(override);
+  }, [handleSubmit]);
+
+  // Whether this endpoint has any spec-defined examples to offer
+  const hasSpecExamples = useMemo(() => {
+    if (endpoint.requestBody?.schema?.['example']) return true;
+    if (bodyFieldDefs.some((f) => !f.isGroupHeader && f.example !== undefined)) return true;
+    if ([...pathParams, ...queryParams].some((p) => p.schema?.['example'] !== undefined)) return true;
+    return false;
+  }, [endpoint, bodyFieldDefs, pathParams, queryParams]);
+
+  // Spec example for the currently focused field (used in faker picker)
+  const currentSpecExample = useMemo((): string | null => {
+    const f = focusedField;
+    if (f.startsWith('body:')) {
+      const def = bodyFieldDefs.find((d) => d.fullKey === f.slice(5) && !d.isGroupHeader);
+      if (def?.example !== undefined) return String(def.example);
+    }
+    if (f.startsWith('path:')) {
+      const param = pathParams.find((p) => p.name === f.slice(5));
+      const ex = param?.schema?.['example'];
+      if (ex !== undefined) return String(ex);
+    }
+    if (f.startsWith('query:')) {
+      const param = queryParams.find((p) => p.name === f.slice(6));
+      const ex = param?.schema?.['example'];
+      if (ex !== undefined) return String(ex);
+    }
+    return null;
+  }, [focusedField, bodyFieldDefs, pathParams, queryParams]);
 
   const handleImport = useCallback(() => {
     const parsed = parseCurl(importInput.trim());
@@ -598,21 +646,37 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
 
     if (fakerOpen) {
       if (key.escape) { setFakerOpen(false); return; }
-      if (key.upArrow) { setFakerIdx((i) => Math.max(0, i - 1)); return; }
-      if (key.downArrow) { setFakerIdx((i) => Math.min(FAKER_ENTRIES.length - 1, i + 1)); return; }
+      if (key.upArrow) {
+        setFakerIdx((i) => {
+          if (i <= 0) return currentSpecExample !== null ? -1 : 0;
+          return i - 1;
+        });
+        return;
+      }
+      if (key.downArrow) {
+        setFakerIdx((i) => {
+          if (i === -1) return 0;
+          return Math.min(FAKER_ENTRIES.length - 1, i + 1);
+        });
+        return;
+      }
       if (input === ' ') {
-        // Regenerate value for current type
-        const entry = FAKER_ENTRIES[fakerIdx];
-        if (entry) {
-          setFakerValues((prev) => ({ ...prev, [entry.id]: entry.generate() }));
+        // Regenerate value for current type (not applicable to spec example)
+        if (fakerIdx >= 0) {
+          const entry = FAKER_ENTRIES[fakerIdx];
+          if (entry) setFakerValues((prev) => ({ ...prev, [entry.id]: entry.generate() }));
         }
         return;
       }
       if (key.return) {
-        const entry = FAKER_ENTRIES[fakerIdx];
-        if (entry) {
-          const value = fakerValues[entry.id] ?? entry.generate();
-          insertFakerValue(value);
+        if (fakerIdx === -1 && currentSpecExample !== null) {
+          insertFakerValue(currentSpecExample);
+        } else {
+          const entry = FAKER_ENTRIES[fakerIdx];
+          if (entry) {
+            const value = fakerValues[entry.id] ?? entry.generate();
+            insertFakerValue(value);
+          }
         }
         setFakerOpen(false);
         return;
@@ -772,6 +836,33 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
     }
 
     if (key.escape) { onClose(); return; }
+    if (input === 'e' && hasSpecExamples) {
+      // Fill all fields that have spec-defined examples
+      const bodyUpdates: Record<string, string> = {};
+      // Try top-level request body example first
+      const bodyEx = endpoint.requestBody?.schema?.['example'];
+      if (bodyEx && typeof bodyEx === 'object' && !Array.isArray(bodyEx) && bodyFieldDefs.length > 0) {
+        const mapped = deserializeBodyFields(bodyFieldDefs, bodyEx as Record<string, unknown>);
+        Object.assign(bodyUpdates, mapped);
+      }
+      // Individual field examples
+      for (const f of bodyFieldDefs) {
+        if (!f.isGroupHeader && f.example !== undefined && !(f.fullKey in bodyUpdates)) {
+          bodyUpdates[f.fullKey] = String(f.example);
+        }
+      }
+      if (Object.keys(bodyUpdates).length > 0) setBodyFieldValues((prev) => ({ ...prev, ...bodyUpdates }));
+      // Path + query params
+      for (const p of pathParams) {
+        const ex = p.schema?.['example'];
+        if (ex !== undefined) setPathValues((prev) => ({ ...prev, [p.name]: String(ex) }));
+      }
+      for (const p of queryParams) {
+        const ex = p.schema?.['example'];
+        if (ex !== undefined) setQueryValues((prev) => ({ ...prev, [p.name]: String(ex) }));
+      }
+      return;
+    }
     if (input === 'i') {
       setImportOpen(true);
       setImportInput('');
@@ -785,7 +876,7 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
         const generated: Record<string, string> = {};
         for (const entry of FAKER_ENTRIES) generated[entry.id] = entry.generate();
         setFakerValues(generated);
-        setFakerIdx(0);
+        setFakerIdx(currentSpecExample !== null ? -1 : 0);
         setFakerOpen(true);
         return;
       }
@@ -899,7 +990,7 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
             : editingField
             ? <Text color="gray">{'[Enter] confirm  [Esc] cancel edit  [Ctrl+Enter] send'}</Text>
             : <Text wrap="truncate" color="gray">{
-                `[↑↓] nav  [↵] edit  [^↵] send  [i] cURL  [s] save  [h] hist  [f] fake${envVarEntries.length > 0 ? '  [v] vars' : ''}  [Esc]`
+                `[↑↓] nav  [↵] edit  [^↵] send  [i] cURL  [s] save  [h] hist  [f] fake${hasSpecExamples ? '  [e] examples' : ''}${envVarEntries.length > 0 ? '  [v] vars' : ''}  [Esc]`
               }</Text>
           }
           {saveMode && (
@@ -1108,6 +1199,8 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
           height={responseHeight}
           onFullView={() => setTreeMode(true)}
           onRepeat={() => { void handleSubmit(); }}
+          onNextUrl={handleNextUrl}
+          onNextCursor={handleNextCursor}
         />
       )}
     </Box>
@@ -1156,6 +1249,19 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
           <Text color="gray">{'  [↑↓] navigate  [Space] regenerate  [Enter] insert  [Esc] cancel'}</Text>
         </Box>
         <Box flexDirection="column">
+          {/* Spec example row (if available) */}
+          {currentSpecExample !== null && (
+            <Box flexDirection="column">
+              <Text color="gray">{'  Spec'}</Text>
+              <Box>
+                <Text backgroundColor={fakerIdx === -1 ? 'cyan' : undefined}>
+                  <Text color={fakerIdx === -1 ? 'black' : 'gray'}>{fakerIdx === -1 ? '  ▶ ' : '    '}</Text>
+                  <Text color={fakerIdx === -1 ? 'black' : 'white'}>{'Spec example'.padEnd(22)}</Text>
+                  <Text color={fakerIdx === -1 ? 'black' : 'green'}>{`  ${currentSpecExample.length > 38 ? currentSpecExample.slice(0, 38) + '…' : currentSpecExample}`}</Text>
+                </Text>
+              </Box>
+            </Box>
+          )}
           {categories.map((cat) => (
             <Box key={cat} flexDirection="column">
               <Text color="gray">{`  ${cat}`}</Text>
