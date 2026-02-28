@@ -12,6 +12,7 @@ import { hasTokenCached } from '../../lib/executor.js';
 import { useApp, useActiveEnvironment } from '../../context/AppContext.js';
 import { saveRequest } from '../../lib/saved-requests.js';
 import { FAKER_ENTRIES } from '../../lib/faker.js';
+import { parseCurl, extractPathParams } from '../../lib/curl-parser.js';
 
 interface RequestFormProps {
   endpoint: Endpoint;
@@ -155,6 +156,28 @@ function serializeBodyFields(fields: BodyFieldDef[], values: Record<string, stri
     if (coerced !== undefined) setNested(result, f.fullKey, coerced);
   }
   return Object.keys(result).length > 0 ? JSON.stringify(result) : '';
+}
+
+// ── Deserialise nested JSON object → flat field values (reverse of serialize) ──
+function getNestedValue(obj: Record<string, unknown>, path: string): unknown {
+  const parts = path.split('.');
+  let cur: unknown = obj;
+  for (const part of parts) {
+    if (cur === null || typeof cur !== 'object') return undefined;
+    cur = (cur as Record<string, unknown>)[part];
+  }
+  return cur;
+}
+
+function deserializeBodyFields(fields: BodyFieldDef[], json: Record<string, unknown>): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const f of fields) {
+    if (f.isGroupHeader) continue;
+    const value = getNestedValue(json, f.fullKey);
+    if (value === undefined || value === null) continue;
+    result[f.fullKey] = typeof value === 'string' ? value : JSON.stringify(value);
+  }
+  return result;
 }
 
 // ── Default value for a field ──────────────────────────────────────────────
@@ -364,6 +387,9 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
   const [fakerOpen, setFakerOpen] = useState(false);
   const [fakerIdx, setFakerIdx] = useState(0);
   const [fakerValues, setFakerValues] = useState<Record<string, string>>({});
+  const [importOpen, setImportOpen] = useState(false);
+  const [importInput, setImportInput] = useState('');
+  const [importError, setImportError] = useState('');
 
   // Navigation fields — group headers navigable as body-group:key, children skipped when group is collapsed
   const fields = useMemo(() => {
@@ -479,6 +505,51 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
     setSaveName('');
   }, [saveName, headersStr, bodyFieldDefs, bodyFieldValues, collapsedBodyGroups, pathValues, queryValues, endpoint, env]);
 
+  const handleImport = useCallback(() => {
+    const parsed = parseCurl(importInput.trim());
+    if (!parsed) {
+      setImportError('Could not parse cURL — check the command and try again.');
+      return;
+    }
+
+    // Path params: match URL path against endpoint path template
+    const extractedPath = extractPathParams(endpoint.path, parsed.path);
+    if (Object.keys(extractedPath).length > 0) {
+      setPathValues((prev) => ({ ...prev, ...extractedPath }));
+    }
+
+    // Query params: only fill known params
+    const knownQuery = new Set(queryParams.map((p) => p.name));
+    const filteredQuery = Object.fromEntries(
+      Object.entries(parsed.queryParams).filter(([k]) => knownQuery.has(k))
+    );
+    if (Object.keys(filteredQuery).length > 0) {
+      setQueryValues((prev) => ({ ...prev, ...filteredQuery }));
+    }
+
+    // Headers: exclude content-type (auto-managed); store the rest as JSON
+    const importHeaders = Object.fromEntries(
+      Object.entries(parsed.headers)
+        .filter(([k]) => k !== 'content-type')
+        .map(([k, v]) => [k, v])
+    );
+    if (Object.keys(importHeaders).length > 0) {
+      setHeadersStr(JSON.stringify(importHeaders));
+    }
+
+    // Body: map JSON to structured fields when schema exists
+    if (parsed.bodyJson && bodyFieldDefs.length > 0) {
+      const mapped = deserializeBodyFields(bodyFieldDefs, parsed.bodyJson);
+      if (Object.keys(mapped).length > 0) {
+        setBodyFieldValues((prev) => ({ ...prev, ...mapped }));
+      }
+    }
+
+    setImportOpen(false);
+    setImportInput('');
+    setImportError('');
+  }, [importInput, endpoint.path, queryParams, bodyFieldDefs]);
+
   const insertFakerValue = useCallback((value: string) => {
     const f = focusedField;
     if (f.startsWith('body:')) {
@@ -546,6 +617,12 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
         setFakerOpen(false);
         return;
       }
+      return;
+    }
+
+    if (importOpen) {
+      if (key.escape) { setImportOpen(false); setImportInput(''); setImportError(''); return; }
+      if (key.return) { handleImport(); return; }
       return;
     }
 
@@ -695,6 +772,12 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
     }
 
     if (key.escape) { onClose(); return; }
+    if (input === 'i') {
+      setImportOpen(true);
+      setImportInput('');
+      setImportError('');
+      return;
+    }
     if (input === 'f') {
       const field = focusedField;
       if (field.startsWith('body:') || field.startsWith('path:') || field.startsWith('query:') || field === 'headers') {
@@ -818,7 +901,7 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
             : <Box>
                 <Text color="gray">{'[↑↓/Tab] navigate  [Enter] edit  [Ctrl+Enter] send  [s] save  [h] history  [Esc] close'}</Text>
                 {envVarEntries.length > 0 && <Text color="gray">{'  [v] vars'}</Text>}
-                <Text color="gray">{'  [f] faker'}</Text>
+                <Text color="gray">{'  [f] faker  [i] import cURL'}</Text>
               </Box>
           }
           {saveMode && (
@@ -1031,6 +1114,32 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
       )}
     </Box>
   );
+
+  if (importOpen) {
+    return (
+      <Box flexDirection="column" height={height} paddingX={1}>
+        <Box>
+          <Text bold color="cyan">{'IMPORT FROM cURL  '}</Text>
+          <Text color="gray">{'[Enter] parse & fill  [Esc] cancel'}</Text>
+        </Box>
+        <Box marginTop={1} flexDirection="column">
+          <Text color="gray">{'Paste your cURL command (single or multi-line):'}</Text>
+          <Box borderStyle="single" paddingX={1} marginTop={1}>
+            <TextInput
+              value={importInput}
+              onChange={(v) => { setImportInput(v); setImportError(''); }}
+              focus
+              placeholder={"curl -X POST 'https://…' -H 'Authorization: Bearer …' -d '{…}'"}
+            />
+          </Box>
+          {importError
+            ? <Text color="red">{`  ✗ ${importError}`}</Text>
+            : <Text color="gray">{'  Fills: path params, query params, headers, body fields'}</Text>
+          }
+        </Box>
+      </Box>
+    );
+  }
 
   if (fakerOpen) {
     const targetLabel = focusedField.startsWith('body:') ? focusedField.slice(5)
