@@ -409,14 +409,14 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
   // Field lookup state
   const [fieldLookups, setFieldLookups] = useState<Record<string, FieldLookup>>(() => getFieldLookups());
   const [lookupSetupOpen, setLookupSetupOpen] = useState(false);
-  const [lookupSetupStep, setLookupSetupStep] = useState<'source' | 'endpoint' | 'query-params' | 'body' | 'value-path' | 'label-path' | 'save-name'>('endpoint');
+  const [lookupSetupStep, setLookupSetupStep] = useState<'source' | 'endpoint' | 'query-params' | 'body' | 'value-path' | 'columns' | 'save-name'>('endpoint');
   const [lookupSetupFilter, setLookupSetupFilter] = useState('');
   const [lookupSetupEndpointId, setLookupSetupEndpointId] = useState('');
   const [lookupSetupEndpointIdx, setLookupSetupEndpointIdx] = useState(0);
   const [lookupSetupValuePath, setLookupSetupValuePath] = useState('');
-  const [lookupSetupLabelPath, setLookupSetupLabelPath] = useState('');
+  const [lookupSetupDisplayPaths, setLookupSetupDisplayPaths] = useState<string[]>([]);
   const [lookupPickerOpen, setLookupPickerOpen] = useState(false);
-  const [lookupPickerItems, setLookupPickerItems] = useState<Array<{ value: string; label?: string }>>([]);
+  const [lookupPickerItems, setLookupPickerItems] = useState<Array<{ value: string; cols: string[] }>>([]);
   const [lookupPickerIdx, setLookupPickerIdx] = useState(0);
   const [lookupFetching, setLookupFetching] = useState(false);
   const [lookupError, setLookupError] = useState('');
@@ -770,8 +770,8 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
           return;
         }
         const values = resolvePathArray(result.body, lookup.valuePath);
-        const labels = lookup.labelPath ? resolvePathArray(result.body, lookup.labelPath) : [];
-        const items = values.map((v, i) => ({ value: v, label: labels[i] }));
+        const colArrays = (lookup.displayPaths ?? []).map((dp) => resolvePathArray(result.body, dp));
+        const items = values.map((v, i) => ({ value: v, cols: colArrays.map((arr) => arr[i] ?? '') }));
         if (items.length === 0) {
           setLookupError('No values found at path');
           setTimeout(() => setLookupError(''), 3000);
@@ -963,13 +963,14 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
         return;
       }
 
-      if (lookupSetupStep === 'label-path') {
-        // JsonTree handles input via onSelect/onClose callbacks
+      if (lookupSetupStep === 'columns') {
+        // [d] removes the last selected column; all other input goes to JsonTree
+        if (input === 'd') { setLookupSetupDisplayPaths((p) => p.slice(0, -1)); return; }
         return;
       }
 
       if (lookupSetupStep === 'save-name') {
-        if (key.escape) { setLookupSetupStep('label-path'); return; }
+        if (key.escape) { setLookupSetupStep('columns'); return; }
         if (key.return) {
           const ep = allEndpoints.find((e) => e.id === lookupSetupEndpointId);
           if (ep) {
@@ -979,7 +980,7 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
             const lookup: FieldLookup = {
               endpointId: ep.id, method: ep.method, path: ep.path,
               valuePath: lookupSetupValuePath.trim(),
-              labelPath: lookupSetupLabelPath.trim() || undefined,
+              displayPaths: lookupSetupDisplayPaths.length > 0 ? lookupSetupDisplayPaths : undefined,
               queryParams: Object.keys(filledQp).length > 0 ? filledQp : undefined,
               body: lookupSetupBody.trim() || undefined,
             };
@@ -1343,7 +1344,7 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
       setLookupSetupFetching(false);
       setLookupSetupFetchError('');
       setLookupSetupValuePath('');
-      setLookupSetupLabelPath('');
+      setLookupSetupDisplayPaths([]);
       setLookupSetupSaveName('');
       setSavedLookups(getSavedLookups());
       setLookupSetupOpen(true);
@@ -1872,6 +1873,21 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
   if (lookupPickerOpen) {
     const fieldKey = currentFieldLookupKey() ?? '';
     const lookup = fieldLookups[fieldKey];
+    const displayPaths = lookup?.displayPaths ?? [];
+    const colCount = displayPaths.length;
+
+    // Compute column widths: max of header key length and data length, capped at 28
+    const pathLastKey = (p: string) => p.split('.').pop()?.replace(/\[\]/g, '') ?? p;
+    const valWidth = Math.min(30, Math.max(8, ...lookupPickerItems.map((r) => r.value.length)));
+    const colWidths = Array.from({ length: colCount }, (_, ci) =>
+      Math.min(28, Math.max(
+        pathLastKey(displayPaths[ci] ?? '').length,
+        ...lookupPickerItems.map((r) => (r.cols[ci] ?? '').length)
+      ))
+    );
+    const padTo = (s: string, w: number) =>
+      s.length > w ? s.slice(0, w - 1) + '…' : s.padEnd(w);
+
     return (
       <Box flexDirection="column" height={height} paddingX={1}>
         <Box>
@@ -1880,7 +1896,16 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
           {lookup && <Text color="gray">{`  from ${lookup.method.toUpperCase()} ${lookup.path}`}</Text>}
           <Text color="gray">{'  [↑↓] navigate  [Enter] select  [Esc] cancel'}</Text>
         </Box>
-        <Box flexDirection="column" marginTop={1}>
+        {/* Column header */}
+        {colCount > 0 && (
+          <Box marginTop={1}>
+            <Text color="gray">{'    ' + padTo('value', valWidth)}</Text>
+            {displayPaths.map((dp, ci) => (
+              <Text key={ci} color="gray">{`  │ ${padTo(pathLastKey(dp), colWidths[ci] ?? 10)}`}</Text>
+            ))}
+          </Box>
+        )}
+        <Box flexDirection="column" marginTop={colCount > 0 ? 0 : 1}>
           {lookupPickerItems.length === 0 ? (
             <Text color="gray">{'No items'}</Text>
           ) : (
@@ -1890,8 +1915,10 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
                 <Box key={i}>
                   <Text backgroundColor={sel ? 'cyan' : undefined}>
                     <Text color={sel ? 'black' : 'gray'}>{sel ? '  ▶ ' : '    '}</Text>
-                    <Text color={sel ? 'black' : 'white'}>{item.value}</Text>
-                    {item.label && <Text color={sel ? 'black' : 'gray'}>{`  — ${item.label}`}</Text>}
+                    <Text color={sel ? 'black' : 'white'}>{colCount > 0 ? padTo(item.value, valWidth) : item.value}</Text>
+                    {item.cols.map((col, ci) => (
+                      <Text key={ci} color={sel ? 'black' : 'gray'}>{`  │ ${padTo(col, colWidths[ci] ?? 28)}`}</Text>
+                    ))}
                   </Text>
                 </Box>
               );
@@ -1917,7 +1944,7 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
       'query-params': '3/6 query params',
       body: '4/6 body',
       'value-path': '5/6 value path',
-      'label-path': '6/6 label path (optional)',
+      'columns': '6/6 display columns (optional)',
       'save-name': '→ save as preset',
     };
 
@@ -1939,14 +1966,14 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
             <Text color="gray">{'  endpoint: '}<Text color="green">{`${selectedEp.method.toUpperCase()} ${selectedEp.path}`}</Text></Text>
           </Box>
         )}
-        {lookupSetupValuePath && (lookupSetupStep === 'label-path' || lookupSetupStep === 'save-name') && (
+        {lookupSetupValuePath && (lookupSetupStep === 'columns' || lookupSetupStep === 'save-name') && (
           <Box>
             <Text color="gray">{'  value: '}<Text color="white">{lookupSetupValuePath}</Text></Text>
           </Box>
         )}
-        {lookupSetupLabelPath && lookupSetupStep === 'save-name' && (
+        {lookupSetupDisplayPaths.length > 0 && lookupSetupStep === 'save-name' && (
           <Box>
-            <Text color="gray">{'  label: '}<Text color="white">{lookupSetupLabelPath}</Text></Text>
+            <Text color="gray">{'  columns: '}<Text color="white">{lookupSetupDisplayPaths.join(', ')}</Text></Text>
           </Box>
         )}
 
@@ -2104,8 +2131,8 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
                   }}
                   onSelect={(path) => {
                     setLookupSetupValuePath(path);
-                    setLookupSetupLabelPath('');
-                    setLookupSetupStep('label-path');
+                    setLookupSetupDisplayPaths([]);
+                    setLookupSetupStep('columns');
                   }}
                 />
               </Box>
@@ -2113,24 +2140,30 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
           </Box>
         )}
 
-        {/* ── label-path ── same tree, pick display label ── */}
-        {lookupSetupStep === 'label-path' && (
+        {/* ── columns ── pick multiple display columns from the same response ── */}
+        {lookupSetupStep === 'columns' && (
           <Box flexDirection="column" marginTop={1}>
-            <Text color="gray">{'Value path: '}<Text color="green">{lookupSetupValuePath}</Text></Text>
-            <Text color="gray">{'Now navigate to a display label field (e.g. name/nome) and press '}<Text color="cyan">{'[Enter]'}</Text>{', or '}<Text color="gray">{'[Esc]'}</Text>{' to skip:'}</Text>
+            <Box>
+              <Text color="gray">{'Columns: '}</Text>
+              {lookupSetupDisplayPaths.length === 0
+                ? <Text color="gray" dimColor>{'none yet'}</Text>
+                : lookupSetupDisplayPaths.map((p, i) => (
+                    <Text key={i} color="cyan">{(i > 0 ? '  ' : '') + p}</Text>
+                  ))
+              }
+              {lookupSetupDisplayPaths.length > 0 && <Text color="gray">{'  [d] remove last'}</Text>}
+            </Box>
+            <Text color="gray">{'Navigate to a display field and press '}<Text color="cyan">{'[Enter]'}</Text>{' to add column, '}<Text color="gray">{'[Esc]'}</Text>{' when done:'}</Text>
             <JsonTree
               body={lookupSetupResponseBody}
               height={height - 6}
               isFocused
               onClose={() => {
-                setLookupSetupLabelPath('');
                 setLookupSetupSaveName('');
                 setLookupSetupStep('save-name');
               }}
               onSelect={(path) => {
-                setLookupSetupLabelPath(path);
-                setLookupSetupSaveName('');
-                setLookupSetupStep('save-name');
+                setLookupSetupDisplayPaths((prev) => prev.includes(path) ? prev : [...prev, path]);
               }}
             />
           </Box>

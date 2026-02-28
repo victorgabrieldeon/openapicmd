@@ -5,7 +5,7 @@ export interface FieldLookup {
   method: string;
   path: string;
   valuePath: string;                    // e.g. "fields[].id" or "[].uuid" for root arrays
-  labelPath?: string;                   // optional display label e.g. "fields[].nome"
+  displayPaths?: string[];              // optional display columns e.g. ["fields[].nome", "fields[].status"]
   queryParams?: Record<string, string>; // static query params sent with lookup request
   body?: string;                        // static JSON body sent with lookup request
 }
