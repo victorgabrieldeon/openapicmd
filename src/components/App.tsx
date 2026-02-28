@@ -12,6 +12,7 @@ import { EnvManager } from './modals/EnvManager.js';
 import { TokenProviderModal } from './modals/TokenProvider.js';
 import { HistoryPanel } from './HistoryPanel.js';
 import { SavedRequestsPanel } from './SavedRequestsPanel.js';
+import { VariablesManager } from './modals/VariablesManager.js';
 
 export function App() {
   const { state, dispatch } = useApp();
@@ -49,6 +50,10 @@ export function App() {
     }
     if (input === 's') {
       dispatch({ type: 'OPEN_MODAL', modal: 'saved-requests' });
+      return;
+    }
+    if (input === 'v') {
+      dispatch({ type: 'OPEN_MODAL', modal: 'variables' });
       return;
     }
     if (key.tab) {
@@ -118,6 +123,16 @@ export function App() {
       <Box flexDirection="column" height={termHeight}>
         <Header />
         <SavedRequestsPanel height={contentHeight} />
+        <Footer />
+      </Box>
+    );
+  }
+
+  if (state.activeModal === 'variables') {
+    return (
+      <Box flexDirection="column" height={termHeight}>
+        <Header />
+        <VariablesManager />
         <Footer />
       </Box>
     );

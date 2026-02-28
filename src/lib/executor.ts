@@ -37,7 +37,7 @@ function buildUrl(baseUrl: string, path: string, pathParams: Record<string, stri
 
 /** Extract a value from a nested object using dot-notation path.
  *  If path is empty, the response body itself is treated as the token. */
-function extractByPath(obj: unknown, path: string): string | null {
+export function extractByPath(obj: unknown, path: string): string | null {
   const trimmed = path.trim();
   // Empty path → body is the token directly (e.g. API returns a plain string)
   if (!trimmed) {
@@ -52,6 +52,12 @@ function extractByPath(obj: unknown, path: string): string | null {
   }
   if (cur === null || cur === undefined) return null;
   return typeof cur === 'string' ? cur : JSON.stringify(cur);
+}
+
+/** Replace {{varName}} placeholders with values from the variables map.
+ *  Unresolved placeholders are left as-is. */
+export function interpolateVariables(str: string, variables: Record<string, string>): string {
+  return str.replace(/\{\{(\w+)\}\}/g, (_, name: string) => variables[name] ?? `{{${name}}}`);
 }
 
 /** Run the pre-request shell hook and return any headers it emits. */
@@ -143,6 +149,24 @@ export async function executeRequest(
   fallbackBaseUrl = ''
 ): Promise<RequestResult> {
   const baseUrl = env?.baseUrl ?? fallbackBaseUrl;
+
+  // Interpolate {{varName}} from env.variables before building the request
+  const vars = env?.variables && Object.keys(env.variables).length > 0 ? env.variables : null;
+  if (vars) {
+    values = {
+      pathParams: Object.fromEntries(
+        Object.entries(values.pathParams).map(([k, v]) => [k, interpolateVariables(v, vars)])
+      ),
+      queryParams: Object.fromEntries(
+        Object.entries(values.queryParams).map(([k, v]) => [k, interpolateVariables(v, vars)])
+      ),
+      headers: Object.fromEntries(
+        Object.entries(values.headers).map(([k, v]) => [k, interpolateVariables(v, vars)])
+      ),
+      body: values.body ? interpolateVariables(values.body, vars) : values.body,
+    };
+  }
+
   const url = buildUrl(baseUrl, endpoint.path, values.pathParams);
 
   // Layer 1: static env headers (lowest priority)

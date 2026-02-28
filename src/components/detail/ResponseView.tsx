@@ -46,7 +46,6 @@ export function ResponseView({ result, height = 12, isFocused = true, onFullView
       : 'gray';
 
   const bodyText = result.error ? `Error: ${result.error}` : formatBody(result.body);
-  // Reserve 2 lines for the header bar + 1 for copy hint
   const bodyLines = bodyText.split('\n').slice(0, Math.max(1, height - 3));
   const truncated = bodyText.split('\n').length > height - 3;
 

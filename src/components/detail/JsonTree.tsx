@@ -1,5 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { Box, Text, useInput } from 'ink';
+import { useApp, useActiveEnvironment } from '../../context/AppContext.js';
+import { saveEnvironment } from '../../lib/config-store.js';
 
 type NodeData = {
   path: string;
@@ -44,6 +46,13 @@ function buildVisible(
   return result;
 }
 
+function nodeValueToString(value: unknown): string {
+  if (value === null || value === undefined) return 'null';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return JSON.stringify(value);
+}
+
 function ValueLabel({ node, isCollapsed, isSelected }: {
   node: NodeData;
   isCollapsed: boolean;
@@ -82,16 +91,25 @@ interface JsonTreeProps {
 }
 
 export function JsonTree({ body, height, isFocused, onClose }: JsonTreeProps) {
+  const { dispatch } = useApp();
+  const activeEnv = useActiveEnvironment();
+
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [cursor, setCursor] = useState(0);
   const [scrollOff, setScrollOff] = useState(0);
+
+  // Capture state
+  const [capturing, setCapturing] = useState(false);
+  const [captureVarName, setCaptureVarName] = useState('');
+  const [captureStatus, setCaptureStatus] = useState<'idle' | 'ok' | 'notfound'>('idle');
+  const [captureMsg, setCaptureMsg] = useState('');
 
   const nodes = useMemo(
     () => buildVisible(body, 'root', 0, 'root', collapsed),
     [body, collapsed]
   );
 
-  // 2 lines: hint bar + path bar
+  // 2 lines: path bar + hint bar
   const visibleCount = Math.max(1, height - 2);
 
   const moveCursor = useCallback((dir: 1 | -1) => {
@@ -117,6 +135,40 @@ export function JsonTree({ body, height, isFocused, onClose }: JsonTreeProps) {
 
   useInput((input, key) => {
     if (!isFocused) return;
+
+    if (capturing) {
+      if (key.escape) {
+        setCapturing(false);
+        setCaptureVarName('');
+        return;
+      }
+      if (key.return) {
+        if (!captureVarName.trim() || !activeEnv) return;
+        const node = nodes[cursor];
+        if (!node) return;
+        const value = nodeValueToString(node.value);
+        const newVars = { ...activeEnv.variables, [captureVarName.trim()]: value };
+        saveEnvironment({ ...activeEnv, variables: newVars });
+        dispatch({ type: 'UPDATE_ENV_VARIABLES', envName: activeEnv.name, variables: newVars });
+        const display = value.length > 40 ? value.slice(0, 40) + '…' : value;
+        setCaptureMsg(`✓ {{${captureVarName.trim()}}} = "${display}"`);
+        setCaptureStatus('ok');
+        setCapturing(false);
+        setCaptureVarName('');
+        setTimeout(() => setCaptureStatus('idle'), 2500);
+        return;
+      }
+      if (key.backspace || key.delete) {
+        setCaptureVarName(s => s.slice(0, -1));
+        return;
+      }
+      if (input && !key.ctrl && !key.meta) {
+        setCaptureVarName(s => s + input);
+      }
+      return;
+    }
+
+    // Normal navigation
     if (key.escape) { onClose(); return; }
     if (key.upArrow) { moveCursor(-1); return; }
     if (key.downArrow) { moveCursor(1); return; }
@@ -130,10 +182,8 @@ export function JsonTree({ body, height, isFocused, onClose }: JsonTreeProps) {
     }
     if (key.leftArrow) {
       if (node.isExpandable && !collapsed.has(node.path)) {
-        // Collapse current
         toggleCollapse(node.path);
       } else if (node.depth > 0) {
-        // Jump to parent
         for (let i = cursor - 1; i >= 0; i--) {
           if (nodes[i]!.depth < node.depth) {
             const diff = cursor - i;
@@ -150,10 +200,46 @@ export function JsonTree({ body, height, isFocused, onClose }: JsonTreeProps) {
       }
       return;
     }
+    if (input === 'v' && activeEnv) {
+      setCapturing(true);
+      setCaptureVarName('');
+      return;
+    }
   });
 
   const visibleNodes = nodes.slice(scrollOff, scrollOff + visibleCount);
   const currentNode = nodes[cursor];
+
+  // Bottom 2 lines: path bar + hint bar
+  const pathBar = capturing ? (
+    <Box>
+      <Text color="cyan">{'  Variable name: '}</Text>
+      <Text>{captureVarName}</Text>
+      <Text color="cyan">{'_'}</Text>
+    </Box>
+  ) : captureStatus === 'ok' ? (
+    <Box>
+      <Text color="green">{'  '}{captureMsg}</Text>
+    </Box>
+  ) : (
+    <Box>
+      <Text color="gray" wrap="truncate">
+        {'  '}{currentNode?.path ?? ''}
+      </Text>
+    </Box>
+  );
+
+  const hintBar = capturing ? (
+    <Box>
+      <Text color="gray">{'  [Enter] save  [Esc] cancel'}</Text>
+    </Box>
+  ) : (
+    <Box>
+      <Text color="gray">{'  [↑↓] move  [Enter/Space] toggle  [←] collapse/parent  [→] expand'}</Text>
+      {activeEnv && <Text color="gray">{'  [v] capture'}</Text>}
+      <Text color="gray">{'  [Esc] close'}</Text>
+    </Box>
+  );
 
   return (
     <Box flexDirection="column" height={height}>
@@ -186,17 +272,8 @@ export function JsonTree({ body, height, isFocused, onClose }: JsonTreeProps) {
         })}
       </Box>
 
-      {/* Path bar */}
-      <Box>
-        <Text color="gray" wrap="truncate">
-          {'  '}{currentNode?.path ?? ''}
-        </Text>
-      </Box>
-
-      {/* Hint bar */}
-      <Box>
-        <Text color="gray">{'  [↑↓] move  [Enter/Space] toggle  [←] collapse/parent  [→] expand  [Esc] close'}</Text>
-      </Box>
+      {pathBar}
+      {hintBar}
     </Box>
   );
 }

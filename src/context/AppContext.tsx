@@ -3,7 +3,7 @@ import type { Endpoint, ParsedSpec, TagGroup } from '../types/openapi.js';
 import type { Environment } from '../types/config.js';
 
 export type ActivePanel = 'sidebar' | 'detail' | 'request' | 'modal';
-export type ModalType = 'load-spec' | 'env-manager' | 'token-provider' | 'history' | 'saved-requests' | null;
+export type ModalType = 'load-spec' | 'env-manager' | 'token-provider' | 'history' | 'saved-requests' | 'variables' | null;
 
 export interface AppState {
   specSource: string | null;
@@ -34,7 +34,8 @@ export type AppAction =
   | { type: 'SET_ENVIRONMENTS'; environments: Environment[] }
   | { type: 'SET_ACTIVE_ENV'; name: string | null }
   | { type: 'LOAD_SPEC'; source: string }
-  | { type: 'SET_SIDEBAR_SEARCH'; active: boolean };
+  | { type: 'SET_SIDEBAR_SEARCH'; active: boolean }
+  | { type: 'UPDATE_ENV_VARIABLES'; envName: string; variables: Record<string, string> };
 
 function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
@@ -94,6 +95,14 @@ function appReducer(state: AppState, action: AppAction): AppState {
 
     case 'SET_SIDEBAR_SEARCH':
       return { ...state, sidebarSearchActive: action.active };
+
+    case 'UPDATE_ENV_VARIABLES':
+      return {
+        ...state,
+        environments: state.environments.map((e) =>
+          e.name === action.envName ? { ...e, variables: action.variables } : e
+        ),
+      };
 
     default:
       return state;

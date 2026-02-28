@@ -37,6 +37,7 @@ export function Footer() {
     { key: 'Tab', label: 'Switch' },
     { key: 'o', label: 'Spec' },
     { key: 'e', label: 'Env' },
+    { key: 'v', label: 'Vars' },
     { key: 'q', label: 'Quit' },
   ];
 

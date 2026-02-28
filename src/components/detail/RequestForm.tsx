@@ -9,7 +9,7 @@ import { useRequest } from '../../hooks/useRequest.js';
 import { ResponseView } from './ResponseView.js';
 import { JsonTree } from './JsonTree.js';
 import { hasTokenCached } from '../../lib/executor.js';
-import { useApp } from '../../context/AppContext.js';
+import { useApp, useActiveEnvironment } from '../../context/AppContext.js';
 import { saveRequest } from '../../lib/saved-requests.js';
 
 interface RequestFormProps {
@@ -316,6 +316,9 @@ type FormRow =
 // ─────────────────────────────────────────────────────────────────────────
 export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, height }: RequestFormProps) {
   const { dispatch } = useApp();
+  const liveEnv = useActiveEnvironment();
+  const envVarEntries = Object.entries(liveEnv?.variables ?? {});
+
   const pathParams = endpoint.parameters.filter((p) => p.in === 'path');
   const queryParams = endpoint.parameters.filter((p) => p.in === 'query');
 
@@ -355,6 +358,8 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
   const [dtTypeBuf, setDtTypeBuf] = useState('');
   const [saveMode, setSaveMode] = useState(false);
   const [saveName, setSaveName] = useState('');
+  const [varPickerOpen, setVarPickerOpen] = useState(false);
+  const [varPickerIdx, setVarPickerIdx] = useState(0);
 
   // Navigation fields — group headers navigable as body-group:key, children skipped when group is collapsed
   const fields = useMemo(() => {
@@ -470,8 +475,37 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
     setSaveName('');
   }, [saveName, headersStr, bodyFieldDefs, bodyFieldValues, collapsedBodyGroups, pathValues, queryValues, endpoint, env]);
 
+  const insertVar = useCallback((varName: string) => {
+    const placeholder = `{{${varName}}}`;
+    if (focusedField.startsWith('body:')) {
+      const fKey = focusedField.slice(5);
+      setBodyFieldValues((prev) => ({ ...prev, [fKey]: (prev[fKey] ?? '') + placeholder }));
+    } else if (focusedField.startsWith('path:')) {
+      const pName = focusedField.slice(5);
+      setPathValues((prev) => ({ ...prev, [pName]: (prev[pName] ?? '') + placeholder }));
+    } else if (focusedField.startsWith('query:')) {
+      const pName = focusedField.slice(6);
+      setQueryValues((prev) => ({ ...prev, [pName]: (prev[pName] ?? '') + placeholder }));
+    } else if (focusedField === 'headers') {
+      setHeadersStr((prev) => prev + placeholder);
+    }
+  }, [focusedField, setBodyFieldValues, setPathValues, setQueryValues]);
+
   useInput((input, key) => {
     if (treeMode) return;
+
+    if (varPickerOpen) {
+      if (key.escape) { setVarPickerOpen(false); return; }
+      if (key.upArrow) { setVarPickerIdx((i) => Math.max(0, i - 1)); return; }
+      if (key.downArrow) { setVarPickerIdx((i) => Math.min(envVarEntries.length - 1, i + 1)); return; }
+      if (key.return && envVarEntries.length > 0) {
+        const entry = envVarEntries[varPickerIdx];
+        if (entry) { insertVar(entry[0]); }
+        setVarPickerOpen(false);
+        return;
+      }
+      return;
+    }
 
     if (saveMode) {
       if (key.return) { handleSave(); return; }
@@ -619,6 +653,29 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
     }
 
     if (key.escape) { onClose(); return; }
+    if (input === 'v' && envVarEntries.length > 0) {
+      const f = focusedField;
+      if (f.startsWith('body:') || f.startsWith('path:') || f.startsWith('query:') || f === 'headers') {
+        let curVal = '';
+        if (f.startsWith('body:')) curVal = bodyFieldValues[f.slice(5)] ?? '';
+        else if (f.startsWith('path:')) curVal = pathValues[f.slice(5)] ?? '';
+        else if (f.startsWith('query:')) curVal = queryValues[f.slice(6)] ?? '';
+        else curVal = headersStr;
+
+        if (/\{\{/.test(curVal)) {
+          // Clear back to empty
+          if (f.startsWith('body:')) setBodyFieldValues((prev) => ({ ...prev, [f.slice(5)]: '' }));
+          else if (f.startsWith('path:')) setPathValues((prev) => ({ ...prev, [f.slice(5)]: '' }));
+          else if (f.startsWith('query:')) setQueryValues((prev) => ({ ...prev, [f.slice(6)]: '' }));
+          else setHeadersStr('');
+          return;
+        }
+
+        setVarPickerIdx(0);
+        setVarPickerOpen(true);
+        return;
+      }
+    }
     if (input === 'h') { dispatch({ type: 'OPEN_MODAL', modal: 'history' }); return; }
     if (input === 's') { setSaveMode(true); setSaveName(`${endpoint.method.toUpperCase()} ${endpoint.path}`); return; }
     if (input === 'S') { dispatch({ type: 'OPEN_MODAL', modal: 'saved-requests' }); return; }
@@ -676,9 +733,22 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
   const isFocused = (id: string) => focusedField === id;
 
   function fieldDisplay(value: string, placeholder: string) {
-    return value
-      ? <Text color="white">{value.length > 60 ? value.slice(0, 60) + '…' : value}</Text>
-      : <Text color="gray" dimColor>{placeholder}</Text>;
+    if (!value) return <Text color="gray" dimColor>{placeholder}</Text>;
+    const display = value.length > 60 ? value.slice(0, 60) + '…' : value;
+    const vars = liveEnv?.variables;
+    if (/\{\{/.test(value) && vars) {
+      const resolved = value.replace(/\{\{(\w+)\}\}/g, (_, n: string) => vars[n] ?? `{{${n}}}`);
+      const resolvedDisplay = resolved !== value
+        ? (resolved.length > 50 ? resolved.slice(0, 50) + '…' : resolved)
+        : null;
+      return (
+        <Box>
+          <Text color="cyan">{display}</Text>
+          {resolvedDisplay && <Text color="gray">{`  → ${resolvedDisplay}`}</Text>}
+        </Box>
+      );
+    }
+    return <Text color="white">{display}</Text>;
   }
 
   const form = (
@@ -691,7 +761,10 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
             ? <Text color="yellow">{'Save as: '}</Text>
             : editingField
             ? <Text color="gray">{'[Enter] confirm  [Esc] cancel edit  [Ctrl+Enter] send'}</Text>
-            : <Text color="gray">{'[↑↓/Tab] navigate  [Enter] edit  [Ctrl+Enter] send  [s] save  [h] history  [Esc] close'}</Text>
+            : <Box>
+                <Text color="gray">{'[↑↓/Tab] navigate  [Enter] edit  [Ctrl+Enter] send  [s] save  [h] history  [Esc] close'}</Text>
+                {envVarEntries.length > 0 && <Text color="gray">{'  [v] vars'}</Text>}
+              </Box>
           }
           {saveMode && (
             <TextInput value={saveName} onChange={setSaveName} focus placeholder={`${endpoint.method.toUpperCase()} ${endpoint.path}`} />
@@ -898,6 +971,39 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
       )}
     </Box>
   );
+
+  if (varPickerOpen) {
+    const targetLabel = focusedField.startsWith('body:') ? focusedField.slice(5)
+      : focusedField.startsWith('path:') ? `{${focusedField.slice(5)}}`
+      : focusedField.startsWith('query:') ? focusedField.slice(6)
+      : 'headers';
+    return (
+      <Box flexDirection="column" height={height} paddingX={1}>
+        <Box>
+          <Text bold color="cyan">{'VARIABLES  '}</Text>
+          <Text color="gray">{'inserting into '}</Text>
+          <Text color="white">{targetLabel}</Text>
+          <Text color="gray">{'  [↑↓] navigate  [Enter] insert  [Esc] cancel'}</Text>
+        </Box>
+        <Box flexDirection="column">
+          {envVarEntries.map(([name, value], i) => {
+            const sel = i === varPickerIdx;
+            const displayVal = value.length > 60 ? value.slice(0, 60) + '…' : value;
+            return (
+              <Box key={name}>
+                <Text backgroundColor={sel ? 'cyan' : undefined}>
+                  <Text color={sel ? 'black' : 'gray'}>{sel ? '  ▶ ' : '    '}</Text>
+                  <Text color={sel ? 'black' : 'cyan'}>{`{{${name}}}`}</Text>
+                  <Text color={sel ? 'black' : 'gray'}>{`  =  `}</Text>
+                  <Text color={sel ? 'black' : 'white'}>{displayVal}</Text>
+                </Text>
+              </Box>
+            );
+          })}
+        </Box>
+      </Box>
+    );
+  }
 
   if (treeMode && result) {
     const statusColor = result.status >= 200 && result.status < 300 ? 'green'
