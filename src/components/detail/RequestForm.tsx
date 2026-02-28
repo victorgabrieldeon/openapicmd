@@ -16,6 +16,7 @@ import { parseCurl, extractPathParams } from '../../lib/curl-parser.js';
 import { getPastParamValues } from '../../lib/history.js';
 import { getFieldPatterns, setFieldPattern, removeFieldPattern } from '../../lib/field-patterns.js';
 import { getFieldLookups, setFieldLookup, removeFieldLookup, resolvePathArray, type FieldLookup } from '../../lib/field-lookups.js';
+import { getSavedLookups, saveLookup, removeSavedLookup } from '../../lib/saved-lookups.js';
 import { executeRequest } from '../../lib/executor.js';
 
 interface RequestFormProps {
@@ -408,7 +409,7 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
   // Field lookup state
   const [fieldLookups, setFieldLookups] = useState<Record<string, FieldLookup>>(() => getFieldLookups());
   const [lookupSetupOpen, setLookupSetupOpen] = useState(false);
-  const [lookupSetupStep, setLookupSetupStep] = useState<'endpoint' | 'value-path' | 'label-path'>('endpoint');
+  const [lookupSetupStep, setLookupSetupStep] = useState<'source' | 'endpoint' | 'query-params' | 'body' | 'value-path' | 'label-path' | 'save-name'>('endpoint');
   const [lookupSetupFilter, setLookupSetupFilter] = useState('');
   const [lookupSetupEndpointId, setLookupSetupEndpointId] = useState('');
   const [lookupSetupEndpointIdx, setLookupSetupEndpointIdx] = useState(0);
@@ -419,6 +420,11 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
   const [lookupPickerIdx, setLookupPickerIdx] = useState(0);
   const [lookupFetching, setLookupFetching] = useState(false);
   const [lookupError, setLookupError] = useState('');
+  const [lookupSetupQueryParams, setLookupSetupQueryParams] = useState('');
+  const [lookupSetupBody, setLookupSetupBody] = useState('');
+  const [lookupSetupSaveName, setLookupSetupSaveName] = useState('');
+  const [lookupSetupSourceIdx, setLookupSetupSourceIdx] = useState(0);
+  const [savedLookups, setSavedLookups] = useState<Record<string, FieldLookup>>(() => getSavedLookups());
 
   // Navigation fields — group headers navigable as body-group:key, children skipped when group is collapsed
   const fields = useMemo(() => {
@@ -743,8 +749,13 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
     if (!lookupEndpoint) return;
     setLookupFetching(true);
     setLookupError('');
-    const emptyValues = { pathParams: {}, queryParams: {}, headers: {}, body: '' };
-    void executeRequest(lookupEndpoint, emptyValues, liveEnv, liveEnv?.baseUrl ?? env?.baseUrl ?? '')
+    const lookupValues = {
+      pathParams: {},
+      queryParams: lookup.queryParams ?? {},
+      headers: {},
+      body: lookup.body ?? '',
+    };
+    void executeRequest(lookupEndpoint, lookupValues, liveEnv, liveEnv?.baseUrl ?? env?.baseUrl ?? '')
       .then((result) => {
         setLookupFetching(false);
         if (result.error || result.body === null || result.body === undefined) {
@@ -783,59 +794,112 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
     }
 
     if (lookupSetupOpen) {
-      if (lookupSetupStep === 'endpoint') {
-        const allEndpoints = state.spec?.endpoints ?? [];
-        const filtered = lookupSetupFilter
-          ? allEndpoints.filter((e) =>
-              `${e.method} ${e.path}`.toLowerCase().includes(lookupSetupFilter.toLowerCase())
-            )
-          : allEndpoints;
+      const allEndpoints = state.spec?.endpoints ?? [];
+      const savedEntries = Object.entries(savedLookups);
+
+      const applyAndClose = (lookup: FieldLookup) => {
+        const fieldKey = currentFieldLookupKey();
+        if (fieldKey) { setFieldLookup(fieldKey, lookup); setFieldLookups(getFieldLookups()); }
+        setLookupSetupOpen(false);
+      };
+
+      if (lookupSetupStep === 'source') {
         if (key.escape) { setLookupSetupOpen(false); return; }
+        if (key.upArrow) { setLookupSetupSourceIdx((i) => Math.max(0, i - 1)); return; }
+        if (key.downArrow) { setLookupSetupSourceIdx((i) => Math.min(Math.max(0, savedEntries.length - 1), i + 1)); return; }
+        if (input === 'n') { setLookupSetupStep('endpoint'); setLookupSetupFilter(''); setLookupSetupEndpointIdx(0); return; }
+        if (input === 'd' && savedEntries.length > 0) {
+          const entry = savedEntries[lookupSetupSourceIdx];
+          if (entry) { removeSavedLookup(entry[0]); setSavedLookups(getSavedLookups()); setLookupSetupSourceIdx((i) => Math.max(0, i - 1)); }
+          return;
+        }
+        if (key.return && savedEntries.length > 0) {
+          const entry = savedEntries[lookupSetupSourceIdx];
+          if (entry) applyAndClose(entry[1]);
+          return;
+        }
+        return;
+      }
+
+      if (lookupSetupStep === 'endpoint') {
+        const filtered = lookupSetupFilter
+          ? allEndpoints.filter((e) => `${e.method} ${e.path}`.toLowerCase().includes(lookupSetupFilter.toLowerCase()))
+          : allEndpoints;
+        if (key.escape) {
+          if (savedEntries.length > 0) { setLookupSetupStep('source'); } else { setLookupSetupOpen(false); }
+          return;
+        }
         if (key.upArrow) { setLookupSetupEndpointIdx((i) => Math.max(0, i - 1)); return; }
         if (key.downArrow) { setLookupSetupEndpointIdx((i) => Math.min(Math.max(0, filtered.length - 1), i + 1)); return; }
         if (key.return) {
           const ep = filtered[lookupSetupEndpointIdx];
-          if (ep) {
-            setLookupSetupEndpointId(ep.id);
-            setLookupSetupStep('value-path');
-            setLookupSetupValuePath('');
-          }
+          if (ep) { setLookupSetupEndpointId(ep.id); setLookupSetupQueryParams(''); setLookupSetupStep('query-params'); }
           return;
         }
         return;
       }
-      if (lookupSetupStep === 'value-path') {
+
+      if (lookupSetupStep === 'query-params') {
         if (key.escape) { setLookupSetupStep('endpoint'); return; }
-        if (key.return && lookupSetupValuePath.trim()) {
-          setLookupSetupStep('label-path');
-          setLookupSetupLabelPath('');
+        if (key.return) {
+          const ep = allEndpoints.find((e) => e.id === lookupSetupEndpointId);
+          setLookupSetupBody('');
+          setLookupSetupStep(ep?.requestBody ? 'body' : 'value-path');
+          setLookupSetupValuePath('');
           return;
         }
         return;
       }
+
+      if (lookupSetupStep === 'body') {
+        if (key.escape) { setLookupSetupStep('query-params'); return; }
+        if (key.return) { setLookupSetupValuePath(''); setLookupSetupStep('value-path'); return; }
+        return;
+      }
+
+      if (lookupSetupStep === 'value-path') {
+        if (key.escape) {
+          const ep = allEndpoints.find((e) => e.id === lookupSetupEndpointId);
+          setLookupSetupStep(ep?.requestBody ? 'body' : 'query-params');
+          return;
+        }
+        if (key.return && lookupSetupValuePath.trim()) { setLookupSetupLabelPath(''); setLookupSetupStep('label-path'); return; }
+        return;
+      }
+
       if (lookupSetupStep === 'label-path') {
         if (key.escape) { setLookupSetupStep('value-path'); return; }
+        if (key.return) { setLookupSetupSaveName(''); setLookupSetupStep('save-name'); return; }
+        return;
+      }
+
+      if (lookupSetupStep === 'save-name') {
+        if (key.escape) { setLookupSetupStep('label-path'); return; }
         if (key.return) {
-          const fieldKey = currentFieldLookupKey();
-          if (fieldKey) {
-            const ep = (state.spec?.endpoints ?? []).find((e) => e.id === lookupSetupEndpointId);
-            if (ep) {
-              const lookup: FieldLookup = {
-                endpointId: ep.id,
-                method: ep.method,
-                path: ep.path,
-                valuePath: lookupSetupValuePath.trim(),
-                labelPath: lookupSetupLabelPath.trim() || undefined,
-              };
-              setFieldLookup(fieldKey, lookup);
-              setFieldLookups(getFieldLookups());
+          const ep = allEndpoints.find((e) => e.id === lookupSetupEndpointId);
+          if (ep) {
+            let qp: Record<string, string> | undefined;
+            if (lookupSetupQueryParams.trim()) {
+              try { qp = JSON.parse(lookupSetupQueryParams) as Record<string, string>; } catch { /* ignore */ }
             }
+            const lookup: FieldLookup = {
+              endpointId: ep.id, method: ep.method, path: ep.path,
+              valuePath: lookupSetupValuePath.trim(),
+              labelPath: lookupSetupLabelPath.trim() || undefined,
+              queryParams: qp,
+              body: lookupSetupBody.trim() || undefined,
+            };
+            if (lookupSetupSaveName.trim()) {
+              saveLookup(lookupSetupSaveName.trim(), lookup);
+              setSavedLookups(getSavedLookups());
+            }
+            applyAndClose(lookup);
           }
-          setLookupSetupOpen(false);
           return;
         }
         return;
       }
+
       return;
     }
 
@@ -1171,12 +1235,18 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
     if (input === 'L') {
       const fieldKey = currentFieldLookupKey();
       if (!fieldKey) return;
-      setLookupSetupStep('endpoint');
+      const hasSaved = Object.keys(getSavedLookups()).length > 0;
+      setLookupSetupStep(hasSaved ? 'source' : 'endpoint');
+      setLookupSetupSourceIdx(0);
       setLookupSetupFilter('');
       setLookupSetupEndpointIdx(0);
       setLookupSetupEndpointId('');
+      setLookupSetupQueryParams('');
+      setLookupSetupBody('');
       setLookupSetupValuePath('');
       setLookupSetupLabelPath('');
+      setLookupSetupSaveName('');
+      setSavedLookups(getSavedLookups());
       setLookupSetupOpen(true);
       return;
     }
@@ -1735,25 +1805,83 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
 
   if (lookupSetupOpen) {
     const allEndpoints = state.spec?.endpoints ?? [];
-    const filtered = lookupSetupFilter
-      ? allEndpoints.filter((e) =>
-          `${e.method} ${e.path}`.toLowerCase().includes(lookupSetupFilter.toLowerCase())
-        )
+    const savedEntries = Object.entries(savedLookups);
+    const filteredEps = lookupSetupFilter
+      ? allEndpoints.filter((e) => `${e.method} ${e.path}`.toLowerCase().includes(lookupSetupFilter.toLowerCase()))
       : allEndpoints;
     const fieldKey = currentFieldLookupKey() ?? '';
     const existingLookup = fieldLookups[fieldKey];
     const selectedEp = allEndpoints.find((e) => e.id === lookupSetupEndpointId);
+    const stepLabels: Record<string, string> = {
+      source: '1/1 choose preset',
+      endpoint: `${savedEntries.length > 0 ? '2' : '1'}/6 endpoint`,
+      'query-params': '3/6 query params',
+      body: '4/6 body',
+      'value-path': '5/6 value path',
+      'label-path': '6/6 label path (optional)',
+      'save-name': '→ save as preset',
+    };
 
     return (
       <Box flexDirection="column" height={height} paddingX={1}>
+        {/* Header */}
         <Box>
           <Text bold color="yellow">{'LINK LOOKUP  '}</Text>
           <Text color="white">{fieldKey}</Text>
-          {existingLookup && (
-            <Text color="gray">{`  (currently: ${existingLookup.method.toUpperCase()} ${existingLookup.path}  →  ${existingLookup.valuePath})`}</Text>
+          <Text color="gray">{`  [${stepLabels[lookupSetupStep] ?? ''}]`}</Text>
+          {existingLookup && lookupSetupStep === 'source' && (
+            <Text color="gray">{`  currently: ${existingLookup.method.toUpperCase()} ${existingLookup.path} → ${existingLookup.valuePath}`}</Text>
           )}
         </Box>
 
+        {/* Breadcrumb when past source step */}
+        {selectedEp && lookupSetupStep !== 'source' && lookupSetupStep !== 'endpoint' && (
+          <Box marginTop={1}>
+            <Text color="gray">{'  endpoint: '}<Text color="green">{`${selectedEp.method.toUpperCase()} ${selectedEp.path}`}</Text></Text>
+          </Box>
+        )}
+        {lookupSetupValuePath && (lookupSetupStep === 'label-path' || lookupSetupStep === 'save-name') && (
+          <Box>
+            <Text color="gray">{'  value: '}<Text color="white">{lookupSetupValuePath}</Text></Text>
+          </Box>
+        )}
+        {lookupSetupLabelPath && lookupSetupStep === 'save-name' && (
+          <Box>
+            <Text color="gray">{'  label: '}<Text color="white">{lookupSetupLabelPath}</Text></Text>
+          </Box>
+        )}
+
+        {/* ── source ── */}
+        {lookupSetupStep === 'source' && (
+          <Box flexDirection="column" marginTop={1}>
+            <Text color="gray">{'Saved presets — pick one or [n] to configure new:'}</Text>
+            <Box flexDirection="column" marginTop={1}>
+              {savedEntries.length === 0 ? (
+                <Text color="gray">{'  (none yet)'}</Text>
+              ) : (
+                savedEntries.map(([name, lk], i) => {
+                  const sel = i === lookupSetupSourceIdx;
+                  return (
+                    <Box key={name}>
+                      <Text backgroundColor={sel ? 'cyan' : undefined}>
+                        <Text color={sel ? 'black' : 'gray'}>{sel ? '  ▶ ' : '    '}</Text>
+                        <Text color={sel ? 'black' : 'white'}>{name.padEnd(20)}</Text>
+                        <Text color={sel ? 'black' : 'gray'}>{'  '}</Text>
+                        <Text color={sel ? 'black' : 'green'}>{`${lk.method.toUpperCase()} ${lk.path}`}</Text>
+                        <Text color={sel ? 'black' : 'gray'}>{`  → ${lk.valuePath}`}</Text>
+                      </Text>
+                    </Box>
+                  );
+                })
+              )}
+            </Box>
+            <Box marginTop={1}>
+              <Text color="gray">{'[↑↓] nav  [Enter] apply  [n] new  [d] delete  [Esc] cancel'}</Text>
+            </Box>
+          </Box>
+        )}
+
+        {/* ── endpoint ── */}
         {lookupSetupStep === 'endpoint' && (
           <Box flexDirection="column" marginTop={1}>
             <Box>
@@ -1766,37 +1894,75 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
               />
             </Box>
             <Box flexDirection="column" marginTop={1}>
-              {filtered.slice(0, height - 7).map((ep, i) => {
+              {filteredEps.slice(0, height - 7).map((ep, i) => {
                 const sel = i === lookupSetupEndpointIdx;
-                const method = ep.method.toUpperCase().padEnd(7);
                 return (
                   <Box key={ep.id}>
                     <Text backgroundColor={sel ? 'cyan' : undefined}>
                       <Text color={sel ? 'black' : 'gray'}>{sel ? '  ▶ ' : '    '}</Text>
-                      <Text color={sel ? 'black' : 'green'}>{method}</Text>
+                      <Text color={sel ? 'black' : 'green'}>{ep.method.toUpperCase().padEnd(7)}</Text>
                       <Text color={sel ? 'black' : 'white'}>{ep.path}</Text>
                     </Text>
                   </Box>
                 );
               })}
-              {filtered.length === 0 && <Text color="gray">{'  No endpoints match'}</Text>}
+              {filteredEps.length === 0 && <Text color="gray">{'  No endpoints match'}</Text>}
             </Box>
             <Box marginTop={1}>
-              <Text color="gray">{'[↑↓] navigate  [Enter] select  [Esc] cancel'}</Text>
+              <Text color="gray">{'[↑↓] nav  [Enter] select  [Esc] back'}</Text>
             </Box>
           </Box>
         )}
 
+        {/* ── query-params ── */}
+        {lookupSetupStep === 'query-params' && (
+          <Box flexDirection="column" marginTop={1}>
+            {selectedEp && selectedEp.parameters.filter((p) => p.in === 'query').length > 0 && (
+              <Text color="gray" dimColor>{
+                `  known params: ${selectedEp.parameters.filter((p) => p.in === 'query').map((p) => p.name).join(', ')}`
+              }</Text>
+            )}
+            <Box marginTop={1}>
+              <Text color="gray">{'Query params '}<Text dimColor>{'(JSON object, optional — e.g. {"status":"ATIVO"})'}</Text></Text>
+            </Box>
+            <Box>
+              <Text color="cyan">{'  → '}</Text>
+              <TextInput
+                value={lookupSetupQueryParams}
+                onChange={setLookupSetupQueryParams}
+                focus
+                placeholder='{"status": "ATIVO"}  (leave empty to skip)'
+              />
+            </Box>
+            <Box marginTop={1}>
+              <Text color="gray">{'[Enter] next  [Esc] back'}</Text>
+            </Box>
+          </Box>
+        )}
+
+        {/* ── body ── */}
+        {lookupSetupStep === 'body' && (
+          <Box flexDirection="column" marginTop={1}>
+            <Text color="gray">{'Request body '}<Text dimColor>{'(JSON, optional)'}</Text></Text>
+            <Box>
+              <Text color="cyan">{'  → '}</Text>
+              <TextInput
+                value={lookupSetupBody}
+                onChange={setLookupSetupBody}
+                focus
+                placeholder='{"tipo": "ATIVO"}  (leave empty to skip)'
+              />
+            </Box>
+            <Box marginTop={1}>
+              <Text color="gray">{'[Enter] next  [Esc] back'}</Text>
+            </Box>
+          </Box>
+        )}
+
+        {/* ── value-path ── */}
         {lookupSetupStep === 'value-path' && (
           <Box flexDirection="column" marginTop={1}>
-            <Text color="gray">
-              {'Selected: '}
-              <Text color="green">{selectedEp ? `${selectedEp.method.toUpperCase()} ${selectedEp.path}` : ''}</Text>
-            </Text>
-            <Box marginTop={1}>
-              <Text color="gray">{'Value path  '}</Text>
-              <Text color="gray" dimColor>{'(e.g. fields[].id  or  [].uuid  or  data.items[].id)'}</Text>
-            </Box>
+            <Text color="gray">{'Value path '}<Text dimColor>{'(e.g. fields[].id  or  [].uuid  or  data.items[].id)'}</Text></Text>
             <Box>
               <Text color="cyan">{'  → '}</Text>
               <TextInput
@@ -1812,13 +1978,10 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
           </Box>
         )}
 
+        {/* ── label-path ── */}
         {lookupSetupStep === 'label-path' && (
           <Box flexDirection="column" marginTop={1}>
-            <Text color="gray">{'Value path: '}<Text color="white">{lookupSetupValuePath}</Text></Text>
-            <Box marginTop={1}>
-              <Text color="gray">{'Display label  '}</Text>
-              <Text color="gray" dimColor>{'(optional, e.g. fields[].nome — shown beside the value in picker)'}</Text>
-            </Box>
+            <Text color="gray">{'Display label '}<Text dimColor>{'(optional — shown beside value in picker, e.g. fields[].nome)'}</Text></Text>
             <Box>
               <Text color="cyan">{'  → '}</Text>
               <TextInput
@@ -1829,7 +1992,26 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
               />
             </Box>
             <Box marginTop={1}>
-              <Text color="gray">{'[Enter] save  [Esc] back'}</Text>
+              <Text color="gray">{'[Enter] next  [Esc] back'}</Text>
+            </Box>
+          </Box>
+        )}
+
+        {/* ── save-name ── */}
+        {lookupSetupStep === 'save-name' && (
+          <Box flexDirection="column" marginTop={1}>
+            <Text color="gray">{'Save as preset '}<Text dimColor>{'(optional — type a name to reuse this config on other fields)'}</Text></Text>
+            <Box>
+              <Text color="cyan">{'  → '}</Text>
+              <TextInput
+                value={lookupSetupSaveName}
+                onChange={setLookupSetupSaveName}
+                focus
+                placeholder="Proposta lookup  (leave empty to skip)"
+              />
+            </Box>
+            <Box marginTop={1}>
+              <Text color="gray">{'[Enter] save & apply  [Esc] back'}</Text>
             </Box>
           </Box>
         )}

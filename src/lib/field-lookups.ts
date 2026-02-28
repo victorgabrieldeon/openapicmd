@@ -4,8 +4,10 @@ export interface FieldLookup {
   endpointId: string;
   method: string;
   path: string;
-  valuePath: string;   // e.g. "fields[].id" or "[].uuid" for root arrays
-  labelPath?: string;  // optional display label e.g. "fields[].nome"
+  valuePath: string;                    // e.g. "fields[].id" or "[].uuid" for root arrays
+  labelPath?: string;                   // optional display label e.g. "fields[].nome"
+  queryParams?: Record<string, string>; // static query params sent with lookup request
+  body?: string;                        // static JSON body sent with lookup request
 }
 
 const store = new Conf<{ lookups: Record<string, FieldLookup> }>({
