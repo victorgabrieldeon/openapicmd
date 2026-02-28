@@ -53,34 +53,43 @@ function nodeValueToString(value: unknown): string {
   return JSON.stringify(value);
 }
 
-function ValueLabel({ node, isCollapsed, isSelected }: {
+function nodeMatchesQuery(node: NodeData, q: string): boolean {
+  if (!q) return false;
+  if (node.key.toLowerCase().includes(q)) return true;
+  if (!node.isExpandable) {
+    if (typeof node.value === 'string') return node.value.toLowerCase().includes(q);
+    if (typeof node.value === 'number' || typeof node.value === 'boolean') return String(node.value).includes(q);
+  }
+  return false;
+}
+
+function ValueLabel({ node, isCollapsed, isHighlighted }: {
   node: NodeData;
   isCollapsed: boolean;
-  isSelected: boolean;
+  isHighlighted: boolean;  // true for selected or search match
 }) {
-  const dim = isSelected ? 'black' : undefined;
   const { value, isExpandable, childCount } = node;
 
   if (!isExpandable) {
-    if (value === null) return <Text color={isSelected ? 'black' : 'red'}>{'null'}</Text>;
-    if (typeof value === 'boolean') return <Text color={isSelected ? 'black' : 'magenta'}>{String(value)}</Text>;
-    if (typeof value === 'number') return <Text color={isSelected ? 'black' : 'yellow'}>{String(value)}</Text>;
+    if (value === null) return <Text color={isHighlighted ? 'black' : 'red'}>{'null'}</Text>;
+    if (typeof value === 'boolean') return <Text color={isHighlighted ? 'black' : 'magenta'}>{String(value)}</Text>;
+    if (typeof value === 'number') return <Text color={isHighlighted ? 'black' : 'yellow'}>{String(value)}</Text>;
     if (typeof value === 'string') {
       const display = value.length > 100 ? value.slice(0, 100) + '…' : value;
-      return <Text color={isSelected ? 'black' : 'green'}>{`"${display}"`}</Text>;
+      return <Text color={isHighlighted ? 'black' : 'green'}>{`"${display}"`}</Text>;
     }
-    return <Text color={dim}>{String(value)}</Text>;
+    return <Text color={isHighlighted ? 'black' : undefined}>{String(value)}</Text>;
   }
 
   const isArr = Array.isArray(value);
   if (isCollapsed) {
     return isArr
-      ? <Text color={isSelected ? 'black' : 'gray'}>{`[ ${childCount} items ]`}</Text>
-      : <Text color={isSelected ? 'black' : 'gray'}>{`{ ${childCount} keys }`}</Text>;
+      ? <Text color={isHighlighted ? 'black' : 'gray'}>{`[ ${childCount} items ]`}</Text>
+      : <Text color={isHighlighted ? 'black' : 'gray'}>{`{ ${childCount} keys }`}</Text>;
   }
   return isArr
-    ? <Text color={isSelected ? 'black' : 'gray'}>{'['}</Text>
-    : <Text color={isSelected ? 'black' : 'gray'}>{'{'}</Text>;
+    ? <Text color={isHighlighted ? 'black' : 'gray'}>{'['}</Text>
+    : <Text color={isHighlighted ? 'black' : 'gray'}>{'{'}</Text>;
 }
 
 interface JsonTreeProps {
@@ -101,16 +110,40 @@ export function JsonTree({ body, height, isFocused, onClose }: JsonTreeProps) {
   // Capture state
   const [capturing, setCapturing] = useState(false);
   const [captureVarName, setCaptureVarName] = useState('');
-  const [captureStatus, setCaptureStatus] = useState<'idle' | 'ok' | 'notfound'>('idle');
+  const [captureStatus, setCaptureStatus] = useState<'idle' | 'ok'>('idle');
   const [captureMsg, setCaptureMsg] = useState('');
+
+  // Search state
+  const [searching, setSearching] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchMatchIdx, setSearchMatchIdx] = useState(0);
 
   const nodes = useMemo(
     () => buildVisible(body, 'root', 0, 'root', collapsed),
     [body, collapsed]
   );
 
-  // 2 lines: path bar + hint bar
+  // 2 lines: path/status bar + hint bar
   const visibleCount = Math.max(1, height - 2);
+
+  // Compute which node indices match the search query
+  const matchIndices = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return [];
+    return nodes.reduce<number[]>((acc, node, i) => {
+      if (nodeMatchesQuery(node, q)) acc.push(i);
+      return acc;
+    }, []);
+  }, [nodes, searchQuery]);
+
+  const jumpCursor = useCallback((idx: number) => {
+    setCursor(idx);
+    setScrollOff(off => {
+      if (idx < off) return idx;
+      if (idx >= off + visibleCount) return idx - visibleCount + 1;
+      return off;
+    });
+  }, [visibleCount]);
 
   const moveCursor = useCallback((dir: 1 | -1) => {
     setCursor(prev => {
@@ -124,6 +157,15 @@ export function JsonTree({ body, height, isFocused, onClose }: JsonTreeProps) {
     });
   }, [nodes.length, visibleCount]);
 
+  const goToNextMatch = useCallback((dir: 1 | -1) => {
+    if (matchIndices.length === 0) return;
+    setSearchMatchIdx(prev => {
+      const next = (prev + dir + matchIndices.length) % matchIndices.length;
+      jumpCursor(matchIndices[next]!);
+      return next;
+    });
+  }, [matchIndices, jumpCursor]);
+
   const toggleCollapse = useCallback((path: string) => {
     setCollapsed(prev => {
       const next = new Set(prev);
@@ -136,12 +178,9 @@ export function JsonTree({ body, height, isFocused, onClose }: JsonTreeProps) {
   useInput((input, key) => {
     if (!isFocused) return;
 
+    // ── Capture mode ──
     if (capturing) {
-      if (key.escape) {
-        setCapturing(false);
-        setCaptureVarName('');
-        return;
-      }
+      if (key.escape) { setCapturing(false); setCaptureVarName(''); return; }
       if (key.return) {
         if (!captureVarName.trim() || !activeEnv) return;
         const node = nodes[cursor];
@@ -158,20 +197,73 @@ export function JsonTree({ body, height, isFocused, onClose }: JsonTreeProps) {
         setTimeout(() => setCaptureStatus('idle'), 2500);
         return;
       }
+      if (key.backspace || key.delete) { setCaptureVarName(s => s.slice(0, -1)); return; }
+      if (input && !key.ctrl && !key.meta) { setCaptureVarName(s => s + input); }
+      return;
+    }
+
+    // ── Search input mode ──
+    if (searching) {
+      if (key.escape) {
+        setSearchQuery('');
+        setSearching(false);
+        return;
+      }
+      if (key.return || input === 'n') {
+        // Confirm query and jump to first match
+        setSearching(false);
+        if (matchIndices.length > 0) {
+          setSearchMatchIdx(0);
+          jumpCursor(matchIndices[0]!);
+        }
+        return;
+      }
       if (key.backspace || key.delete) {
-        setCaptureVarName(s => s.slice(0, -1));
+        setSearchQuery(s => s.slice(0, -1));
         return;
       }
       if (input && !key.ctrl && !key.meta) {
-        setCaptureVarName(s => s + input);
+        const newQ = searchQuery + input;
+        setSearchQuery(newQ);
+        // Live jump to first match as user types
+        const q = newQ.trim().toLowerCase();
+        if (q) {
+          const firstMatch = nodes.findIndex(n => nodeMatchesQuery(n, q));
+          if (firstMatch >= 0) {
+            setSearchMatchIdx(0);
+            jumpCursor(firstMatch);
+          }
+        }
       }
       return;
     }
 
-    // Normal navigation
-    if (key.escape) { onClose(); return; }
+    // ── Normal navigation ──
+    if (key.escape) {
+      if (searchQuery) { setSearchQuery(''); setSearchMatchIdx(0); return; }
+      onClose();
+      return;
+    }
     if (key.upArrow) { moveCursor(-1); return; }
     if (key.downArrow) { moveCursor(1); return; }
+
+    // Search triggers
+    if (input === '/') {
+      setSearching(true);
+      setSearchQuery('');
+      setSearchMatchIdx(0);
+      return;
+    }
+
+    // Navigate matches (only when there is an active query)
+    if (input === 'n' && searchQuery && matchIndices.length > 0) {
+      goToNextMatch(1);
+      return;
+    }
+    if (input === 'N' && searchQuery && matchIndices.length > 0) {
+      goToNextMatch(-1);
+      return;
+    }
 
     const node = nodes[cursor];
     if (!node) return;
@@ -195,9 +287,7 @@ export function JsonTree({ body, height, isFocused, onClose }: JsonTreeProps) {
       return;
     }
     if (key.rightArrow) {
-      if (node.isExpandable && collapsed.has(node.path)) {
-        toggleCollapse(node.path);
-      }
+      if (node.isExpandable && collapsed.has(node.path)) toggleCollapse(node.path);
       return;
     }
     if (input === 'v' && activeEnv) {
@@ -209,37 +299,74 @@ export function JsonTree({ body, height, isFocused, onClose }: JsonTreeProps) {
 
   const visibleNodes = nodes.slice(scrollOff, scrollOff + visibleCount);
   const currentNode = nodes[cursor];
+  const matchSet = useMemo(() => new Set(matchIndices), [matchIndices]);
 
-  // Bottom 2 lines: path bar + hint bar
-  const pathBar = capturing ? (
-    <Box>
-      <Text color="cyan">{'  Variable name: '}</Text>
-      <Text>{captureVarName}</Text>
-      <Text color="cyan">{'_'}</Text>
-    </Box>
-  ) : captureStatus === 'ok' ? (
-    <Box>
-      <Text color="green">{'  '}{captureMsg}</Text>
-    </Box>
-  ) : (
-    <Box>
-      <Text color="gray" wrap="truncate">
-        {'  '}{currentNode?.path ?? ''}
-      </Text>
-    </Box>
-  );
+  // ── Bottom bars ──
+  let pathBar: React.ReactNode;
+  if (capturing) {
+    pathBar = (
+      <Box>
+        <Text color="cyan">{'  Variable name: '}</Text>
+        <Text>{captureVarName}</Text>
+        <Text color="cyan">{'_'}</Text>
+      </Box>
+    );
+  } else if (captureStatus === 'ok') {
+    pathBar = <Box><Text color="green">{'  '}{captureMsg}</Text></Box>;
+  } else if (searching) {
+    pathBar = (
+      <Box>
+        <Text color="cyan">{'  /'}</Text>
+        <Text color="white">{searchQuery}</Text>
+        <Text color="cyan">{'_'}</Text>
+        {matchIndices.length > 0 && (
+          <Text color="green">{`  ${matchIndices.length} match${matchIndices.length === 1 ? '' : 'es'}`}</Text>
+        )}
+        {searchQuery.trim() && matchIndices.length === 0 && (
+          <Text color="red">{'  no matches'}</Text>
+        )}
+      </Box>
+    );
+  } else if (searchQuery) {
+    const pos = matchIndices.length > 0 ? `${searchMatchIdx + 1}/${matchIndices.length}` : '0/0';
+    pathBar = (
+      <Box>
+        <Text color="yellow">{'  /'}</Text>
+        <Text color="yellow">{searchQuery}</Text>
+        <Text color="gray">{`  ${pos}`}</Text>
+        <Text color="gray" wrap="truncate">{'  '}{currentNode?.path ?? ''}</Text>
+      </Box>
+    );
+  } else {
+    pathBar = (
+      <Box>
+        <Text color="gray" wrap="truncate">{'  '}{currentNode?.path ?? ''}</Text>
+      </Box>
+    );
+  }
 
-  const hintBar = capturing ? (
-    <Box>
-      <Text color="gray">{'  [Enter] save  [Esc] cancel'}</Text>
-    </Box>
-  ) : (
-    <Box>
-      <Text color="gray">{'  [↑↓] move  [Enter/Space] toggle  [←] collapse/parent  [→] expand'}</Text>
-      {activeEnv && <Text color="gray">{'  [v] capture'}</Text>}
-      <Text color="gray">{'  [Esc] close'}</Text>
-    </Box>
-  );
+  let hintBar: React.ReactNode;
+  if (capturing) {
+    hintBar = <Box><Text color="gray">{'  [Enter] save  [Esc] cancel'}</Text></Box>;
+  } else if (searching) {
+    hintBar = <Box><Text color="gray">{'  type to search keys & values  [Enter] confirm  [Esc] cancel'}</Text></Box>;
+  } else if (searchQuery && matchIndices.length > 0) {
+    hintBar = (
+      <Box>
+        <Text color="gray">{'  [n] next  [N] prev  [/] new search  [Esc] clear'}</Text>
+        {activeEnv && <Text color="gray">{'  [v] capture'}</Text>}
+        <Text color="gray">{'  [Esc×2] close'}</Text>
+      </Box>
+    );
+  } else {
+    hintBar = (
+      <Box>
+        <Text color="gray">{'  [↑↓] move  [Enter/Space] toggle  [←] collapse  [→] expand  [/] search'}</Text>
+        {activeEnv && <Text color="gray">{'  [v] capture'}</Text>}
+        <Text color="gray">{'  [Esc] close'}</Text>
+      </Box>
+    );
+  }
 
   return (
     <Box flexDirection="column" height={height}>
@@ -248,24 +375,26 @@ export function JsonTree({ body, height, isFocused, onClose }: JsonTreeProps) {
         {visibleNodes.map((node, i) => {
           const absIdx = scrollOff + i;
           const isSelected = absIdx === cursor;
+          const isMatch = matchSet.has(absIdx) && Boolean(searchQuery);
+          const isHighlighted = isSelected || isMatch;
           const isCollapsed = collapsed.has(node.path);
           const indent = '  '.repeat(node.depth);
           const arrow = node.isExpandable
             ? (isCollapsed ? '▶ ' : '▼ ')
             : '  ';
 
-          const keyColor = isSelected ? 'black' : 'cyan';
+          const bg = isSelected ? 'cyan' : isMatch ? 'yellow' : undefined;
 
           return (
             <Box key={node.path + absIdx}>
-              <Text backgroundColor={isSelected ? 'cyan' : undefined}>
+              <Text backgroundColor={bg}>
                 {indent}
-                <Text color={isSelected ? 'black' : 'white'}>{arrow}</Text>
+                <Text color={isHighlighted ? 'black' : 'white'}>{arrow}</Text>
                 {node.depth > 0
-                  ? <Text color={keyColor}>{node.key}</Text>
-                  : <Text color={keyColor}>{'root'}</Text>}
-                <Text color={isSelected ? 'black' : 'gray'}>{': '}</Text>
-                <ValueLabel node={node} isCollapsed={isCollapsed} isSelected={isSelected} />
+                  ? <Text color={isHighlighted ? 'black' : 'cyan'}>{node.key}</Text>
+                  : <Text color={isHighlighted ? 'black' : 'cyan'}>{'root'}</Text>}
+                <Text color={isHighlighted ? 'black' : 'gray'}>{': '}</Text>
+                <ValueLabel node={node} isCollapsed={isCollapsed} isHighlighted={isHighlighted} />
               </Text>
             </Box>
           );
