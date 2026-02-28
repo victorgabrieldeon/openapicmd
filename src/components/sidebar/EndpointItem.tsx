@@ -23,15 +23,15 @@ interface EndpointItemProps {
 export function EndpointItem({ method, path, isSelected, maxWidth = 22 }: EndpointItemProps) {
   const color = METHOD_COLORS[method] ?? 'white';
   const methodLabel = method.toUpperCase().padEnd(7);
-  // Truncate path to fit sidebar
-  const availableWidth = maxWidth - 8; // 8 for method + space
+  // Truncate path to fit sidebar (method is 7 chars via padEnd(7))
+  const availableWidth = maxWidth - 7;
   const displayPath = path.length > availableWidth ? path.slice(0, availableWidth - 1) + '…' : path;
 
   return (
     <Box>
-      <Text backgroundColor={isSelected ? 'blue' : undefined} color={isSelected ? 'white' : undefined}>
+      <Text wrap="truncate" backgroundColor={isSelected ? 'blue' : undefined} color={isSelected ? 'white' : undefined}>
         <Text color={isSelected ? 'white' : color}>{methodLabel}</Text>
-        <Text color={isSelected ? 'white' : 'white'}>{displayPath}</Text>
+        <Text wrap="truncate" color={isSelected ? 'white' : 'white'}>{displayPath}</Text>
       </Text>
     </Box>
   );

@@ -898,11 +898,9 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
             ? <Text color="yellow">{'Save as: '}</Text>
             : editingField
             ? <Text color="gray">{'[Enter] confirm  [Esc] cancel edit  [Ctrl+Enter] send'}</Text>
-            : <Box>
-                <Text color="gray">{'[↑↓/Tab] navigate  [Enter] edit  [Ctrl+Enter] send  [s] save  [h] history  [Esc] close'}</Text>
-                {envVarEntries.length > 0 && <Text color="gray">{'  [v] vars'}</Text>}
-                <Text color="gray">{'  [f] faker  [i] import cURL'}</Text>
-              </Box>
+            : <Text wrap="truncate" color="gray">{
+                `[↑↓] nav  [↵] edit  [^↵] send  [i] cURL  [s] save  [h] hist  [f] fake${envVarEntries.length > 0 ? '  [v] vars' : ''}  [Esc]`
+              }</Text>
           }
           {saveMode && (
             <TextInput value={saveName} onChange={setSaveName} focus placeholder={`${endpoint.method.toUpperCase()} ${endpoint.path}`} />

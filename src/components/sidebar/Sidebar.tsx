@@ -259,7 +259,7 @@ export function Sidebar({ height }: SidebarProps) {
                 method={item.method as HttpMethod}
                 path={item.path}
                 isSelected={isSelected || item.endpointId === state.selectedEndpointId}
-                maxWidth={20}
+                maxWidth={22}
               />
             </Box>
           );
