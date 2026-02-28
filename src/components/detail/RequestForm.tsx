@@ -14,6 +14,9 @@ import { saveRequest } from '../../lib/saved-requests.js';
 import { FAKER_ENTRIES, suggestFakerForField } from '../../lib/faker.js';
 import { parseCurl, extractPathParams } from '../../lib/curl-parser.js';
 import { getPastParamValues } from '../../lib/history.js';
+import { getFieldPatterns, setFieldPattern, removeFieldPattern } from '../../lib/field-patterns.js';
+import { getFieldLookups, setFieldLookup, removeFieldLookup, resolvePathArray, type FieldLookup } from '../../lib/field-lookups.js';
+import { executeRequest } from '../../lib/executor.js';
 
 interface RequestFormProps {
   endpoint: Endpoint;
@@ -344,7 +347,7 @@ type FormRow =
 
 // ─────────────────────────────────────────────────────────────────────────
 export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, height }: RequestFormProps) {
-  const { dispatch } = useApp();
+  const { state, dispatch } = useApp();
   const liveEnv = useActiveEnvironment();
   const envVarEntries = Object.entries(liveEnv?.variables ?? {});
 
@@ -397,6 +400,25 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
   const [importError, setImportError] = useState('');
   const [histCompValues, setHistCompValues] = useState<string[]>([]);
   const [histCompIdx, setHistCompIdx] = useState(-1);
+  const [fieldPatterns, setFieldPatterns] = useState<Record<string, string>>(() => getFieldPatterns());
+  const [fakerPatternMode, setFakerPatternMode] = useState(false);
+  const [patternFeedback, setPatternFeedback] = useState('');
+  const [patternsOpen, setPatternsOpen] = useState(false);
+  const [patternsIdx, setPatternsIdx] = useState(0);
+  // Field lookup state
+  const [fieldLookups, setFieldLookups] = useState<Record<string, FieldLookup>>(() => getFieldLookups());
+  const [lookupSetupOpen, setLookupSetupOpen] = useState(false);
+  const [lookupSetupStep, setLookupSetupStep] = useState<'endpoint' | 'value-path' | 'label-path'>('endpoint');
+  const [lookupSetupFilter, setLookupSetupFilter] = useState('');
+  const [lookupSetupEndpointId, setLookupSetupEndpointId] = useState('');
+  const [lookupSetupEndpointIdx, setLookupSetupEndpointIdx] = useState(0);
+  const [lookupSetupValuePath, setLookupSetupValuePath] = useState('');
+  const [lookupSetupLabelPath, setLookupSetupLabelPath] = useState('');
+  const [lookupPickerOpen, setLookupPickerOpen] = useState(false);
+  const [lookupPickerItems, setLookupPickerItems] = useState<Array<{ value: string; label?: string }>>([]);
+  const [lookupPickerIdx, setLookupPickerIdx] = useState(0);
+  const [lookupFetching, setLookupFetching] = useState(false);
+  const [lookupError, setLookupError] = useState('');
 
   // Navigation fields — group headers navigable as body-group:key, children skipped when group is collapsed
   const fields = useMemo(() => {
@@ -638,13 +660,27 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
 
   // Compute a smart auto-fill suggestion for an empty field (feature 3)
   const computeFieldSuggestion = useCallback((field: string): string | null => {
+    const vars = liveEnv?.variables ?? {};
+
+    /** Check env vars for a matching name — inserts {{varName}} reference */
+    const matchVar = (name: string): string | null => {
+      if (vars[name]) return `{{${name}}}`;
+      const lower = name.toLowerCase();
+      for (const k of Object.keys(vars)) {
+        if (k.toLowerCase() === lower) return `{{${k}}}`;
+      }
+      return null;
+    };
+
     if (field.startsWith('body:')) {
       const fKey = field.slice(5);
       if (bodyFieldValues[fKey]) return null;
       const def = bodyFieldDefs.find((d) => d.fullKey === fKey && !d.isGroupHeader);
       if (!def) return null;
       if (def.example !== undefined) return String(def.example);
-      return suggestFakerForField(def.label, def.type, def.format, def.enumValues);
+      const v = matchVar(def.label) ?? matchVar(fKey);
+      if (v) return v;
+      return suggestFakerForField(def.label, def.type, def.format, def.enumValues, fieldPatterns);
     }
     if (field.startsWith('path:')) {
       const name = field.slice(5);
@@ -654,7 +690,9 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
       const ex = p.schema?.['example'];
       if (ex !== undefined) return String(ex);
       if (p.default) return p.default;
-      return suggestFakerForField(name, p.type, p.schema?.['format'] as string | undefined);
+      const v = matchVar(name);
+      if (v) return v;
+      return suggestFakerForField(name, p.type, p.schema?.['format'] as string | undefined, undefined, fieldPatterns);
     }
     if (field.startsWith('query:')) {
       const name = field.slice(6);
@@ -664,10 +702,12 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
       const ex = p.schema?.['example'];
       if (ex !== undefined) return String(ex);
       if (p.default) return p.default;
-      return suggestFakerForField(name, p.type, p.schema?.['format'] as string | undefined);
+      const v = matchVar(name);
+      if (v) return v;
+      return suggestFakerForField(name, p.type, p.schema?.['format'] as string | undefined, undefined, fieldPatterns);
     }
     return null;
-  }, [bodyFieldValues, bodyFieldDefs, pathValues, queryValues, pathParams, queryParams]);
+  }, [bodyFieldValues, bodyFieldDefs, pathValues, queryValues, pathParams, queryParams, liveEnv, fieldPatterns]);
 
   const insertVar = useCallback((varName: string) => {
     const placeholder = `{{${varName}}}`;
@@ -685,8 +725,137 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
     }
   }, [focusedField, setBodyFieldValues, setPathValues, setQueryValues]);
 
+  /** Returns the key used for field-lookup storage for the currently focused field */
+  const currentFieldLookupKey = useCallback((): string | null => {
+    const f = focusedField;
+    if (f.startsWith('body:')) {
+      const def = bodyFieldDefs.find((d) => d.fullKey === f.slice(5) && !d.isGroupHeader);
+      return def?.label ?? null;
+    }
+    if (f.startsWith('path:')) return f.slice(5);
+    if (f.startsWith('query:')) return f.slice(6);
+    return null;
+  }, [focusedField, bodyFieldDefs]);
+
+  /** Execute the configured lookup endpoint and open the value picker */
+  const executeLookup = useCallback((lookup: FieldLookup) => {
+    const lookupEndpoint = state.spec?.endpoints.find((e) => e.id === lookup.endpointId);
+    if (!lookupEndpoint) return;
+    setLookupFetching(true);
+    setLookupError('');
+    const emptyValues = { pathParams: {}, queryParams: {}, headers: {}, body: '' };
+    void executeRequest(lookupEndpoint, emptyValues, liveEnv, liveEnv?.baseUrl ?? env?.baseUrl ?? '')
+      .then((result) => {
+        setLookupFetching(false);
+        if (result.error || result.body === null || result.body === undefined) {
+          setLookupError(result.error ?? 'Empty response');
+          setTimeout(() => setLookupError(''), 3000);
+          return;
+        }
+        const values = resolvePathArray(result.body, lookup.valuePath);
+        const labels = lookup.labelPath ? resolvePathArray(result.body, lookup.labelPath) : [];
+        const items = values.map((v, i) => ({ value: v, label: labels[i] }));
+        if (items.length === 0) {
+          setLookupError('No values found at path');
+          setTimeout(() => setLookupError(''), 3000);
+          return;
+        }
+        setLookupPickerItems(items);
+        setLookupPickerIdx(0);
+        setLookupPickerOpen(true);
+      });
+  }, [state.spec, liveEnv, env]);
+
   useInput((input, key) => {
     if (treeMode) return;
+
+    if (lookupPickerOpen) {
+      if (key.escape) { setLookupPickerOpen(false); return; }
+      if (key.upArrow) { setLookupPickerIdx((i) => Math.max(0, i - 1)); return; }
+      if (key.downArrow) { setLookupPickerIdx((i) => Math.min(lookupPickerItems.length - 1, i + 1)); return; }
+      if (key.return && lookupPickerItems.length > 0) {
+        const item = lookupPickerItems[lookupPickerIdx];
+        if (item) insertFakerValue(item.value);
+        setLookupPickerOpen(false);
+        return;
+      }
+      return;
+    }
+
+    if (lookupSetupOpen) {
+      if (lookupSetupStep === 'endpoint') {
+        const allEndpoints = state.spec?.endpoints ?? [];
+        const filtered = lookupSetupFilter
+          ? allEndpoints.filter((e) =>
+              `${e.method} ${e.path}`.toLowerCase().includes(lookupSetupFilter.toLowerCase())
+            )
+          : allEndpoints;
+        if (key.escape) { setLookupSetupOpen(false); return; }
+        if (key.upArrow) { setLookupSetupEndpointIdx((i) => Math.max(0, i - 1)); return; }
+        if (key.downArrow) { setLookupSetupEndpointIdx((i) => Math.min(Math.max(0, filtered.length - 1), i + 1)); return; }
+        if (key.return) {
+          const ep = filtered[lookupSetupEndpointIdx];
+          if (ep) {
+            setLookupSetupEndpointId(ep.id);
+            setLookupSetupStep('value-path');
+            setLookupSetupValuePath('');
+          }
+          return;
+        }
+        return;
+      }
+      if (lookupSetupStep === 'value-path') {
+        if (key.escape) { setLookupSetupStep('endpoint'); return; }
+        if (key.return && lookupSetupValuePath.trim()) {
+          setLookupSetupStep('label-path');
+          setLookupSetupLabelPath('');
+          return;
+        }
+        return;
+      }
+      if (lookupSetupStep === 'label-path') {
+        if (key.escape) { setLookupSetupStep('value-path'); return; }
+        if (key.return) {
+          const fieldKey = currentFieldLookupKey();
+          if (fieldKey) {
+            const ep = (state.spec?.endpoints ?? []).find((e) => e.id === lookupSetupEndpointId);
+            if (ep) {
+              const lookup: FieldLookup = {
+                endpointId: ep.id,
+                method: ep.method,
+                path: ep.path,
+                valuePath: lookupSetupValuePath.trim(),
+                labelPath: lookupSetupLabelPath.trim() || undefined,
+              };
+              setFieldLookup(fieldKey, lookup);
+              setFieldLookups(getFieldLookups());
+            }
+          }
+          setLookupSetupOpen(false);
+          return;
+        }
+        return;
+      }
+      return;
+    }
+
+    if (patternsOpen) {
+      const patternList = Object.entries(fieldPatterns);
+      if (key.escape) { setPatternsOpen(false); return; }
+      if (key.upArrow) { setPatternsIdx((i) => Math.max(0, i - 1)); return; }
+      if (key.downArrow) { setPatternsIdx((i) => Math.min(Math.max(0, patternList.length - 1), i + 1)); return; }
+      if (input === 'd' && patternList.length > 0) {
+        const entry = patternList[patternsIdx];
+        if (entry) {
+          removeFieldPattern(entry[0]);
+          const next = getFieldPatterns();
+          setFieldPatterns(next);
+          setPatternsIdx((i) => Math.max(0, Math.min(i, Object.keys(next).length - 1)));
+        }
+        return;
+      }
+      return;
+    }
 
     if (varPickerOpen) {
       if (key.escape) { setVarPickerOpen(false); return; }
@@ -702,10 +871,10 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
     }
 
     if (fakerOpen) {
-      if (key.escape) { setFakerOpen(false); return; }
+      if (key.escape) { setFakerOpen(false); setFakerPatternMode(false); return; }
       if (key.upArrow) {
         setFakerIdx((i) => {
-          if (i <= 0) return currentSpecExample !== null ? -1 : 0;
+          if (i <= 0) return (!fakerPatternMode && currentSpecExample !== null) ? -1 : 0;
           return i - 1;
         });
         return;
@@ -726,6 +895,33 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
         return;
       }
       if (key.return) {
+        if (fakerPatternMode) {
+          // Save pattern instead of inserting value
+          if (fakerIdx >= 0) {
+            const entry = FAKER_ENTRIES[fakerIdx];
+            if (entry) {
+              const f = focusedField;
+              let patternKey = '';
+              if (f.startsWith('body:')) {
+                const def = bodyFieldDefs.find((d) => d.fullKey === f.slice(5) && !d.isGroupHeader);
+                patternKey = def?.label ?? f.slice(5);
+              } else if (f.startsWith('path:')) {
+                patternKey = f.slice(5);
+              } else if (f.startsWith('query:')) {
+                patternKey = f.slice(6);
+              }
+              if (patternKey) {
+                setFieldPattern(patternKey, entry.id);
+                setFieldPatterns(getFieldPatterns());
+                setPatternFeedback(`✓ Pattern saved: ${patternKey} → ${entry.label}`);
+                setTimeout(() => setPatternFeedback(''), 2500);
+              }
+            }
+          }
+          setFakerOpen(false);
+          setFakerPatternMode(false);
+          return;
+        }
         if (fakerIdx === -1 && currentSpecExample !== null) {
           insertFakerValue(currentSpecExample);
         } else {
@@ -947,6 +1143,43 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
         return;
       }
     }
+    if (input === 'p') {
+      const field = focusedField;
+      if (field.startsWith('body:') || field.startsWith('path:') || field.startsWith('query:')) {
+        const generated: Record<string, string> = {};
+        for (const entry of FAKER_ENTRIES) generated[entry.id] = entry.generate();
+        setFakerValues(generated);
+        setFakerIdx(0);
+        setFakerPatternMode(true);
+        setFakerOpen(true);
+        return;
+      }
+    }
+    if (input === 'P') {
+      setPatternsIdx(0);
+      setPatternsOpen(true);
+      return;
+    }
+    if (input === 'l') {
+      const fieldKey = currentFieldLookupKey();
+      if (!fieldKey) return;
+      const lookup = fieldLookups[fieldKey];
+      if (!lookup) return; // no lookup configured, [L] to configure
+      executeLookup(lookup);
+      return;
+    }
+    if (input === 'L') {
+      const fieldKey = currentFieldLookupKey();
+      if (!fieldKey) return;
+      setLookupSetupStep('endpoint');
+      setLookupSetupFilter('');
+      setLookupSetupEndpointIdx(0);
+      setLookupSetupEndpointId('');
+      setLookupSetupValuePath('');
+      setLookupSetupLabelPath('');
+      setLookupSetupOpen(true);
+      return;
+    }
     if (input === 'v' && envVarEntries.length > 0) {
       const f = focusedField;
       if (f.startsWith('body:') || f.startsWith('path:') || f.startsWith('query:') || f === 'headers') {
@@ -1065,9 +1298,18 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
                   ? `[^↵] send  [^↑↓] history: ${histCompValues.slice(0, 5).join('  ·  ')}  [↵] confirm  [Esc] cancel`
                   : '[Enter] confirm  [Esc] cancel  [Ctrl+Enter] send'
               }</Text>
-            : <Text wrap="truncate" color="gray">{
-                `[↑↓] nav  [↵] edit  [^↵] send  [i] cURL  [s] save  [h] hist  [f] fake${hasSpecExamples ? '  [e] examples' : ''}${envVarEntries.length > 0 ? '  [v] vars' : ''}  [Esc]`
-              }</Text>
+            : lookupFetching
+            ? <Text color="cyan">{'Fetching lookup options...'}</Text>
+            : lookupError
+            ? <Text color="red">{`✗ ${lookupError}`}</Text>
+            : patternFeedback
+            ? <Text color="green">{patternFeedback}</Text>
+            : <Text wrap="truncate" color="gray">{(() => {
+                const fieldKey = currentFieldLookupKey();
+                const hasLookup = fieldKey ? Boolean(fieldLookups[fieldKey]) : false;
+                const lookupHint = fieldKey ? (hasLookup ? '  [l] fetch  [L] relink' : '  [L] link lookup') : '';
+                return `[↑↓] nav  [↵] edit  [^↵] send  [i] cURL  [s] save  [h] hist  [f] fake  [p] pattern  [P] patterns${lookupHint}${hasSpecExamples ? '  [e] examples' : ''}${envVarEntries.length > 0 ? '  [v] vars' : ''}  [Esc]`;
+              })()}</Text>
           }
           {saveMode && (
             <TextInput value={saveName} onChange={setSaveName} focus placeholder={`${endpoint.method.toUpperCase()} ${endpoint.path}`} />
@@ -1314,19 +1556,41 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
       : focusedField.startsWith('query:') ? focusedField.slice(6)
       : 'headers';
 
+    const patternTargetLabel = (() => {
+      const f = focusedField;
+      if (f.startsWith('body:')) {
+        const def = bodyFieldDefs.find((d) => d.fullKey === f.slice(5) && !d.isGroupHeader);
+        return def?.label ?? f.slice(5);
+      }
+      if (f.startsWith('path:')) return f.slice(5);
+      if (f.startsWith('query:')) return f.slice(6);
+      return '';
+    })();
+
     const categories = Array.from(new Set(FAKER_ENTRIES.map((e) => e.category)));
 
     return (
       <Box flexDirection="column" height={height} paddingX={1}>
         <Box>
-          <Text bold color="cyan">{'FAKER  '}</Text>
-          <Text color="gray">{'inserting into '}</Text>
-          <Text color="white">{targetLabel}</Text>
-          <Text color="gray">{'  [↑↓] navigate  [Space] regenerate  [Enter] insert  [Esc] cancel'}</Text>
+          {fakerPatternMode ? (
+            <>
+              <Text bold color="magenta">{'DEFINE PATTERN  '}</Text>
+              <Text color="gray">{'for field '}</Text>
+              <Text color="white">{patternTargetLabel}</Text>
+              <Text color="gray">{'  [↑↓] navigate  [Enter] save  [Esc] cancel'}</Text>
+            </>
+          ) : (
+            <>
+              <Text bold color="cyan">{'FAKER  '}</Text>
+              <Text color="gray">{'inserting into '}</Text>
+              <Text color="white">{targetLabel}</Text>
+              <Text color="gray">{'  [↑↓] navigate  [Space] regenerate  [Enter] insert  [Esc] cancel'}</Text>
+            </>
+          )}
         </Box>
         <Box flexDirection="column">
-          {/* Spec example row (if available) */}
-          {currentSpecExample !== null && (
+          {/* Spec example row (only in insert mode, not pattern mode) */}
+          {!fakerPatternMode && currentSpecExample !== null && (
             <Box flexDirection="column">
               <Text color="gray">{'  Spec'}</Text>
               <Box>
@@ -1351,7 +1615,7 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
                     <Text backgroundColor={sel ? 'cyan' : undefined}>
                       <Text color={sel ? 'black' : 'gray'}>{sel ? '  ▶ ' : '    '}</Text>
                       <Text color={sel ? 'black' : 'white'}>{entry.label.padEnd(22)}</Text>
-                      <Text color={sel ? 'black' : 'green'}>{`  ${displayVal}`}</Text>
+                      {!fakerPatternMode && <Text color={sel ? 'black' : 'green'}>{`  ${displayVal}`}</Text>}
                     </Text>
                   </Box>
                 );
@@ -1392,6 +1656,183 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
             );
           })}
         </Box>
+      </Box>
+    );
+  }
+
+  if (patternsOpen) {
+    const patternList = Object.entries(fieldPatterns);
+    return (
+      <Box flexDirection="column" height={height} paddingX={1}>
+        <Box>
+          <Text bold color="magenta">{'FIELD PATTERNS  '}</Text>
+          <Text color="gray">{'[↑↓] navigate  [d] delete  [Esc] close'}</Text>
+        </Box>
+        <Box marginTop={1} flexDirection="column">
+          {patternList.length === 0 ? (
+            <Text color="gray">{'No patterns defined yet. Press [p] on any body/path/query field to define one.'}</Text>
+          ) : (
+            patternList.map(([fieldName, fakerId], i) => {
+              const fakerEntry = FAKER_ENTRIES.find((e) => e.id === fakerId);
+              const sel = i === patternsIdx;
+              return (
+                <Box key={fieldName}>
+                  <Text backgroundColor={sel ? 'cyan' : undefined}>
+                    <Text color={sel ? 'black' : 'gray'}>{sel ? '  ▶ ' : '    '}</Text>
+                    <Text color={sel ? 'black' : 'white'}>{fieldName.padEnd(24)}</Text>
+                    <Text color={sel ? 'black' : 'gray'}>{'  →  '}</Text>
+                    <Text color={sel ? 'black' : 'green'}>{fakerEntry?.label ?? fakerId}</Text>
+                  </Text>
+                </Box>
+              );
+            })
+          )}
+        </Box>
+        {patternFeedback && (
+          <Box marginTop={1}>
+            <Text color="green">{patternFeedback}</Text>
+          </Box>
+        )}
+        <Box marginTop={1}>
+          <Text color="gray">{'Patterns auto-fill empty fields when you press [Tab]'}</Text>
+        </Box>
+      </Box>
+    );
+  }
+
+  if (lookupPickerOpen) {
+    const fieldKey = currentFieldLookupKey() ?? '';
+    const lookup = fieldLookups[fieldKey];
+    return (
+      <Box flexDirection="column" height={height} paddingX={1}>
+        <Box>
+          <Text bold color="cyan">{'LOOKUP  '}</Text>
+          <Text color="white">{fieldKey}</Text>
+          {lookup && <Text color="gray">{`  from ${lookup.method.toUpperCase()} ${lookup.path}`}</Text>}
+          <Text color="gray">{'  [↑↓] navigate  [Enter] select  [Esc] cancel'}</Text>
+        </Box>
+        <Box flexDirection="column" marginTop={1}>
+          {lookupPickerItems.length === 0 ? (
+            <Text color="gray">{'No items'}</Text>
+          ) : (
+            lookupPickerItems.map((item, i) => {
+              const sel = i === lookupPickerIdx;
+              return (
+                <Box key={i}>
+                  <Text backgroundColor={sel ? 'cyan' : undefined}>
+                    <Text color={sel ? 'black' : 'gray'}>{sel ? '  ▶ ' : '    '}</Text>
+                    <Text color={sel ? 'black' : 'white'}>{item.value}</Text>
+                    {item.label && <Text color={sel ? 'black' : 'gray'}>{`  — ${item.label}`}</Text>}
+                  </Text>
+                </Box>
+              );
+            })
+          )}
+        </Box>
+      </Box>
+    );
+  }
+
+  if (lookupSetupOpen) {
+    const allEndpoints = state.spec?.endpoints ?? [];
+    const filtered = lookupSetupFilter
+      ? allEndpoints.filter((e) =>
+          `${e.method} ${e.path}`.toLowerCase().includes(lookupSetupFilter.toLowerCase())
+        )
+      : allEndpoints;
+    const fieldKey = currentFieldLookupKey() ?? '';
+    const existingLookup = fieldLookups[fieldKey];
+    const selectedEp = allEndpoints.find((e) => e.id === lookupSetupEndpointId);
+
+    return (
+      <Box flexDirection="column" height={height} paddingX={1}>
+        <Box>
+          <Text bold color="yellow">{'LINK LOOKUP  '}</Text>
+          <Text color="white">{fieldKey}</Text>
+          {existingLookup && (
+            <Text color="gray">{`  (currently: ${existingLookup.method.toUpperCase()} ${existingLookup.path}  →  ${existingLookup.valuePath})`}</Text>
+          )}
+        </Box>
+
+        {lookupSetupStep === 'endpoint' && (
+          <Box flexDirection="column" marginTop={1}>
+            <Box>
+              <Text color="gray">{'Filter: '}</Text>
+              <TextInput
+                value={lookupSetupFilter}
+                onChange={(v) => { setLookupSetupFilter(v); setLookupSetupEndpointIdx(0); }}
+                focus
+                placeholder="GET /proposta..."
+              />
+            </Box>
+            <Box flexDirection="column" marginTop={1}>
+              {filtered.slice(0, height - 7).map((ep, i) => {
+                const sel = i === lookupSetupEndpointIdx;
+                const method = ep.method.toUpperCase().padEnd(7);
+                return (
+                  <Box key={ep.id}>
+                    <Text backgroundColor={sel ? 'cyan' : undefined}>
+                      <Text color={sel ? 'black' : 'gray'}>{sel ? '  ▶ ' : '    '}</Text>
+                      <Text color={sel ? 'black' : 'green'}>{method}</Text>
+                      <Text color={sel ? 'black' : 'white'}>{ep.path}</Text>
+                    </Text>
+                  </Box>
+                );
+              })}
+              {filtered.length === 0 && <Text color="gray">{'  No endpoints match'}</Text>}
+            </Box>
+            <Box marginTop={1}>
+              <Text color="gray">{'[↑↓] navigate  [Enter] select  [Esc] cancel'}</Text>
+            </Box>
+          </Box>
+        )}
+
+        {lookupSetupStep === 'value-path' && (
+          <Box flexDirection="column" marginTop={1}>
+            <Text color="gray">
+              {'Selected: '}
+              <Text color="green">{selectedEp ? `${selectedEp.method.toUpperCase()} ${selectedEp.path}` : ''}</Text>
+            </Text>
+            <Box marginTop={1}>
+              <Text color="gray">{'Value path  '}</Text>
+              <Text color="gray" dimColor>{'(e.g. fields[].id  or  [].uuid  or  data.items[].id)'}</Text>
+            </Box>
+            <Box>
+              <Text color="cyan">{'  → '}</Text>
+              <TextInput
+                value={lookupSetupValuePath}
+                onChange={setLookupSetupValuePath}
+                focus
+                placeholder="fields[].id"
+              />
+            </Box>
+            <Box marginTop={1}>
+              <Text color="gray">{'[Enter] next  [Esc] back'}</Text>
+            </Box>
+          </Box>
+        )}
+
+        {lookupSetupStep === 'label-path' && (
+          <Box flexDirection="column" marginTop={1}>
+            <Text color="gray">{'Value path: '}<Text color="white">{lookupSetupValuePath}</Text></Text>
+            <Box marginTop={1}>
+              <Text color="gray">{'Display label  '}</Text>
+              <Text color="gray" dimColor>{'(optional, e.g. fields[].nome — shown beside the value in picker)'}</Text>
+            </Box>
+            <Box>
+              <Text color="cyan">{'  → '}</Text>
+              <TextInput
+                value={lookupSetupLabelPath}
+                onChange={setLookupSetupLabelPath}
+                focus
+                placeholder="fields[].nome  (leave empty to skip)"
+              />
+            </Box>
+            <Box marginTop={1}>
+              <Text color="gray">{'[Enter] save  [Esc] back'}</Text>
+            </Box>
+          </Box>
+        )}
       </Box>
     );
   }

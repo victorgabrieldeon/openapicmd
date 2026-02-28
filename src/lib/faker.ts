@@ -203,9 +203,21 @@ export function suggestFakerForField(
   fieldName: string,
   type: string,
   format?: string,
-  enumValues?: string[]
+  enumValues?: string[],
+  customPatterns?: Record<string, string>   // fieldName → FAKER_ENTRIES id
 ): string | null {
   if (enumValues?.length) return enumValues[0]!;
+
+  // User-defined patterns (highest priority after enum)
+  if (customPatterns) {
+    const lower = fieldName.toLowerCase();
+    for (const [pattern, id] of Object.entries(customPatterns)) {
+      if (pattern === fieldName || pattern.toLowerCase() === lower) {
+        const entry = FAKER_ENTRIES.find((e) => e.id === id);
+        if (entry) return entry.generate();
+      }
+    }
+  }
 
   const n = fieldName.toLowerCase();
 
