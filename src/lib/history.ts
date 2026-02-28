@@ -86,6 +86,22 @@ export function clearHistory(): void {
   store.set('history', []);
 }
 
+/** Return unique past values for a path or query param on a given endpoint (newest-first). */
+export function getPastParamValues(
+  endpointId: string,
+  kind: 'pathParams' | 'queryParams',
+  paramName: string
+): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const entry of getHistory()) {
+    if (entry.endpointId !== endpointId) continue;
+    const val = entry.values[kind][paramName];
+    if (val && !seen.has(val)) { seen.add(val); result.push(val); }
+  }
+  return result;
+}
+
 export function relativeTime(timestamp: number): string {
   const diffMs = Date.now() - timestamp;
   const diffSec = Math.floor(diffMs / 1000);

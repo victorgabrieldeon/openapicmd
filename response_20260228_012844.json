@@ -1,0 +1,1237 @@
+{
+  "items": [
+    {
+      "id": 6647,
+      "createdAt": "2026-02-28T00:58:45.936Z",
+      "updatedAt": "2026-02-28T00:58:45.978Z",
+      "credor": {
+        "id": 674410,
+        "documentoCredor": "10038973553",
+        "nome": "JOAO ALVES DA SILVA"
+      },
+      "parecerista": null,
+      "mesa": "PARCERIA",
+      "tipoCredorProposta": "ORIGINARIO",
+      "responsavel": {
+        "id": 219,
+        "email": "leticia.silveira@addebitare.com.br",
+        "nome": "Leticia Ferreira da Silveira"
+      },
+      "supervisor": null,
+      "dalacodeId": null,
+      "currentStage": "INCOMPLETO",
+      "currentStageStatus": "EM_ANDAMENTO",
+      "pendencia": true
+    },
+    {
+      "id": 6646,
+      "createdAt": "2026-02-27T16:45:33.945Z",
+      "updatedAt": "2026-02-27T16:45:33.976Z",
+      "credor": {
+        "id": 675672,
+        "documentoCredor": "03750366608",
+        "nome": "dasfasdf"
+      },
+      "parecerista": null,
+      "mesa": "PARCERIA",
+      "tipoCredorProposta": "NOVA_CESSAO",
+      "responsavel": {
+        "id": 219,
+        "email": "leticia.silveira@addebitare.com.br",
+        "nome": "Leticia Ferreira da Silveira"
+      },
+      "supervisor": null,
+      "dalacodeId": null,
+      "currentStage": "INCOMPLETO",
+      "currentStageStatus": "EM_ANDAMENTO",
+      "pendencia": true
+    },
+    {
+      "id": 6645,
+      "createdAt": "2026-02-27T16:43:47.808Z",
+      "updatedAt": "2026-02-27T16:43:48.204Z",
+      "credor": {
+        "id": 675671,
+        "documentoCredor": "45975435200",
+        "nome": "asdfasdf"
+      },
+      "parecerista": null,
+      "mesa": "PARCERIA",
+      "tipoCredorProposta": "HERDEIRO",
+      "responsavel": {
+        "id": 219,
+        "email": "leticia.silveira@addebitare.com.br",
+        "nome": "Leticia Ferreira da Silveira"
+      },
+      "supervisor": null,
+      "dalacodeId": null,
+      "currentStage": "INCOMPLETO",
+      "currentStageStatus": "EM_ANDAMENTO",
+      "pendencia": true
+    },
+    {
+      "id": 6644,
+      "createdAt": "2026-02-26T17:03:52.164Z",
+      "updatedAt": "2026-02-26T17:20:31.707Z",
+      "credor": {
+        "id": 455188,
+        "documentoCredor": "30138651809",
+        "nome": "MOACYR FERNANDO DE ARAUJO"
+      },
+      "parecerista": null,
+      "mesa": "FEDERAL",
+      "tipoCredorProposta": "ORIGINARIO",
+      "responsavel": {
+        "id": 93,
+        "email": "thaina.cristina@addebitare.com.br",
+        "nome": "Thainá Cristina"
+      },
+      "supervisor": {
+        "id": 513,
+        "email": "tabata.bomfim@addebitare.com.br",
+        "nome": "Tabata Bomfim"
+      },
+      "dalacodeId": "6965",
+      "currentStage": "CALCULO",
+      "currentStageStatus": "EM_ANDAMENTO",
+      "pendencia": false
+    },
+    {
+      "id": 6643,
+      "createdAt": "2026-02-26T15:53:00.013Z",
+      "updatedAt": "2026-02-26T16:54:50.645Z",
+      "credor": {
+        "id": 173984,
+        "documentoCredor": "18381337801",
+        "nome": "Bruna Noguti Ribas"
+      },
+      "parecerista": null,
+      "mesa": "MUNICIPAL",
+      "tipoCredorProposta": "ORIGINARIO",
+      "responsavel": {
+        "id": 552,
+        "email": "marina.almeida@addebitare.com.br",
+        "nome": "Marina Almeida"
+      },
+      "supervisor": null,
+      "dalacodeId": "6964",
+      "currentStage": "INAPTO",
+      "currentStageStatus": null,
+      "pendencia": false
+    },
+    {
+      "id": 6642,
+      "createdAt": "2026-02-26T15:09:18.296Z",
+      "updatedAt": "2026-02-26T15:14:39.288Z",
+      "credor": {
+        "id": 664049,
+        "documentoCredor": "75284308700",
+        "nome": "RICARDO NEY SILVA DE PAULA"
+      },
+      "parecerista": null,
+      "mesa": "PARCERIA",
+      "tipoCredorProposta": "ORIGINARIO",
+      "responsavel": {
+        "id": 169,
+        "email": "yasmin.bispo@addebitare.com.br",
+        "nome": "Yasmin Bispo"
+      },
+      "supervisor": null,
+      "dalacodeId": "6963",
+      "currentStage": "CALCULO",
+      "currentStageStatus": "EM_ANDAMENTO",
+      "pendencia": false
+    },
+    {
+      "id": 6641,
+      "createdAt": "2026-02-26T11:51:02.950Z",
+      "updatedAt": "2026-02-26T11:55:02.079Z",
+      "credor": {
+        "id": 674824,
+        "documentoCredor": "06908575861",
+        "nome": "ELIANA APARECIDA DUTRA ALVES"
+      },
+      "parecerista": null,
+      "mesa": "PARCERIA",
+      "tipoCredorProposta": "ORIGINARIO",
+      "responsavel": {
+        "id": 219,
+        "email": "leticia.silveira@addebitare.com.br",
+        "nome": "Leticia Ferreira da Silveira"
+      },
+      "supervisor": null,
+      "dalacodeId": null,
+      "currentStage": "INCOMPLETO",
+      "currentStageStatus": "EM_ANDAMENTO",
+      "pendencia": true
+    },
+    {
+      "id": 6640,
+      "createdAt": "2026-02-26T11:43:37.971Z",
+      "updatedAt": "2026-02-26T17:58:16.519Z",
+      "credor": {
+        "id": 667245,
+        "documentoCredor": "02099420378",
+        "nome": "LEOPOLDINA MARIA COLARES DE ARAUJO"
+      },
+      "parecerista": null,
+      "mesa": "FEDERAL",
+      "tipoCredorProposta": "ORIGINARIO",
+      "responsavel": {
+        "id": 147,
+        "email": "michelle.cravo@addebitare.com.br",
+        "nome": "Michelle Cravo"
+      },
+      "supervisor": {
+        "id": 513,
+        "email": "tabata.bomfim@addebitare.com.br",
+        "nome": "Tabata Bomfim"
+      },
+      "dalacodeId": "6960",
+      "currentStage": "DUE_DILIGENCE",
+      "currentStageStatus": "EM_ANDAMENTO",
+      "pendencia": false
+    },
+    {
+      "id": 6638,
+      "createdAt": "2026-02-26T09:47:55.450Z",
+      "updatedAt": "2026-02-26T14:58:18.406Z",
+      "credor": {
+        "id": 674410,
+        "documentoCredor": "10038973553",
+        "nome": "JOAO ALVES DA SILVA"
+      },
+      "parecerista": null,
+      "mesa": "PARCERIA",
+      "tipoCredorProposta": "ORIGINARIO",
+      "responsavel": {
+        "id": 219,
+        "email": "leticia.silveira@addebitare.com.br",
+        "nome": "Leticia Ferreira da Silveira"
+      },
+      "supervisor": null,
+      "dalacodeId": "6962",
+      "currentStage": "CALCULO",
+      "currentStageStatus": "EM_ANDAMENTO",
+      "pendencia": false
+    },
+    {
+      "id": 1942,
+      "createdAt": "2026-02-25T21:35:55.585Z",
+      "updatedAt": "2026-02-26T15:18:19.375Z",
+      "credor": {
+        "id": 673803,
+        "documentoCredor": "21736457810",
+        "nome": "LOURENCO BATISTA ROXO"
+      },
+      "parecerista": null,
+      "mesa": "PARCERIA",
+      "tipoCredorProposta": "HERDEIRO",
+      "responsavel": {
+        "id": 169,
+        "email": "yasmin.bispo@addebitare.com.br",
+        "nome": "Yasmin Bispo"
+      },
+      "supervisor": null,
+      "dalacodeId": "6959",
+      "currentStage": "CALCULO",
+      "currentStageStatus": "REPROVADO",
+      "pendencia": false
+    },
+    {
+      "id": 1840,
+      "createdAt": "2026-02-25T21:31:12.973Z",
+      "updatedAt": "2026-02-26T18:23:08.094Z",
+      "credor": {
+        "id": 674379,
+        "documentoCredor": "25240073830",
+        "nome": "RODRIGO PIRES ROXO"
+      },
+      "parecerista": null,
+      "mesa": "PARCERIA",
+      "tipoCredorProposta": "HERDEIRO",
+      "responsavel": {
+        "id": 169,
+        "email": "yasmin.bispo@addebitare.com.br",
+        "nome": "Yasmin Bispo"
+      },
+      "supervisor": null,
+      "dalacodeId": "6958",
+      "currentStage": "DUE_DILIGENCE",
+      "currentStageStatus": "EM_ANDAMENTO",
+      "pendencia": false
+    },
+    {
+      "id": 1299,
+      "createdAt": "2026-02-25T18:27:06.199Z",
+      "updatedAt": "2026-02-26T17:04:49.979Z",
+      "credor": {
+        "id": 673859,
+        "documentoCredor": "30867483890",
+        "nome": "APARECIDA HELENA TEODORO DOS SANTOS"
+      },
+      "parecerista": null,
+      "mesa": "PARCERIA",
+      "tipoCredorProposta": "ORIGINARIO",
+      "responsavel": {
+        "id": 169,
+        "email": "yasmin.bispo@addebitare.com.br",
+        "nome": "Yasmin Bispo"
+      },
+      "supervisor": null,
+      "dalacodeId": "6956",
+      "currentStage": "PARECER_PROCESSO",
+      "currentStageStatus": "EM_ANDAMENTO",
+      "pendencia": false
+    },
+    {
+      "id": 1298,
+      "createdAt": "2026-02-25T17:54:51.107Z",
+      "updatedAt": "2026-02-26T17:06:28.540Z",
+      "credor": {
+        "id": 468560,
+        "documentoCredor": "07144674803",
+        "nome": "WELINTON CESAR LIPORINI"
+      },
+      "parecerista": null,
+      "mesa": "PARCERIA",
+      "tipoCredorProposta": "HONORARIO_CONTRATUAL",
+      "responsavel": {
+        "id": 86,
+        "email": "daniel.pedroso@addebitare.com.br",
+        "nome": "Daniel Pedroso"
+      },
+      "supervisor": null,
+      "dalacodeId": "6955",
+      "currentStage": "DUE_DILIGENCE",
+      "currentStageStatus": "EM_ANDAMENTO",
+      "pendencia": false
+    },
+    {
+      "id": 1297,
+      "createdAt": "2026-02-25T17:30:47.005Z",
+      "updatedAt": "2026-02-25T17:31:52.094Z",
+      "credor": {
+        "id": 665735,
+        "documentoCredor": "37671501824",
+        "nome": "Lucas Cardoso"
+      },
+      "parecerista": null,
+      "mesa": "PARCERIA",
+      "tipoCredorProposta": "ORIGINARIO",
+      "responsavel": {
+        "id": 169,
+        "email": "yasmin.bispo@addebitare.com.br",
+        "nome": "Yasmin Bispo"
+      },
+      "supervisor": null,
+      "dalacodeId": null,
+      "currentStage": "INCOMPLETO",
+      "currentStageStatus": "EM_ANDAMENTO",
+      "pendencia": true
+    },
+    {
+      "id": 1296,
+      "createdAt": "2026-02-25T17:21:53.713Z",
+      "updatedAt": "2026-02-25T17:28:13.503Z",
+      "credor": {
+        "id": 664013,
+        "documentoCredor": "06218040534",
+        "nome": "ANTONIO EDSON DE AMORIM RIBEIRO"
+      },
+      "parecerista": null,
+      "mesa": "PARCERIA",
+      "tipoCredorProposta": "ORIGINARIO",
+      "responsavel": {
+        "id": 169,
+        "email": "yasmin.bispo@addebitare.com.br",
+        "nome": "Yasmin Bispo"
+      },
+      "supervisor": null,
+      "dalacodeId": "6954",
+      "currentStage": "CALCULO",
+      "currentStageStatus": "EM_ANDAMENTO",
+      "pendencia": false
+    },
+    {
+      "id": 1295,
+      "createdAt": "2026-02-25T16:56:41.639Z",
+      "updatedAt": "2026-02-26T16:10:47.038Z",
+      "credor": {
+        "id": 656872,
+        "documentoCredor": "01664357408",
+        "nome": "ADISON COSME DOS SANTOS"
+      },
+      "parecerista": null,
+      "mesa": "PARCERIA",
+      "tipoCredorProposta": "ORIGINARIO",
+      "responsavel": {
+        "id": 211,
+        "email": "fabio.lopes@addebitare.com.br",
+        "nome": "Fabio Lopes"
+      },
+      "supervisor": null,
+      "dalacodeId": "6952",
+      "currentStage": "PARECER_PROCESSO",
+      "currentStageStatus": "EM_ANDAMENTO",
+      "pendencia": false
+    },
+    {
+      "id": 1294,
+      "createdAt": "2026-02-25T16:49:37.666Z",
+      "updatedAt": "2026-02-26T12:28:26.628Z",
+      "credor": {
+        "id": 674389,
+        "documentoCredor": "59148390844",
+        "nome": "MARIA BEATRIZ AZEVEDO SILVA DE ATAIDE PAIVA"
+      },
+      "parecerista": null,
+      "mesa": "PARCERIA",
+      "tipoCredorProposta": "HERDEIRO",
+      "responsavel": {
+        "id": 169,
+        "email": "yasmin.bispo@addebitare.com.br",
+        "nome": "Yasmin Bispo"
+      },
+      "supervisor": null,
+      "dalacodeId": "6957",
+      "currentStage": "CALCULO",
+      "currentStageStatus": "REPROVADO",
+      "pendencia": false
+    },
+    {
+      "id": 1293,
+      "createdAt": "2026-02-25T16:09:47.249Z",
+      "updatedAt": "2026-02-26T17:05:40.878Z",
+      "credor": {
+        "id": 140064,
+        "documentoCredor": "18850076800",
+        "nome": "Christian Lamelza"
+      },
+      "parecerista": null,
+      "mesa": "MUNICIPAL",
+      "tipoCredorProposta": "ORIGINARIO",
+      "responsavel": {
+        "id": 202,
+        "email": "victor.sampaio@addebitare.com.br",
+        "nome": "Victor Sampaio Arrojo"
+      },
+      "supervisor": null,
+      "dalacodeId": "6953",
+      "currentStage": "PARECER_PROCESSO",
+      "currentStageStatus": "EM_ANDAMENTO",
+      "pendencia": false
+    },
+    {
+      "id": 1292,
+      "createdAt": "2026-02-25T15:52:40.091Z",
+      "updatedAt": "2026-02-26T16:03:49.607Z",
+      "credor": {
+        "id": 546309,
+        "documentoCredor": "78018188815",
+        "nome": "MARIA LUCIA GALICIA DE LIMA"
+      },
+      "parecerista": null,
+      "mesa": "PARCERIA",
+      "tipoCredorProposta": "ORIGINARIO",
+      "responsavel": {
+        "id": 12,
+        "email": "lucas.expedito@addebitare.com.br",
+        "nome": "Lucas Expedito"
+      },
+      "supervisor": null,
+      "dalacodeId": "6951",
+      "currentStage": "PARECER_PROCESSO",
+      "currentStageStatus": "EM_ANDAMENTO",
+      "pendencia": false
+    },
+    {
+      "id": 1291,
+      "createdAt": "2026-02-25T15:38:19.697Z",
+      "updatedAt": "2026-02-25T15:42:51.042Z",
+      "credor": {
+        "id": 430381,
+        "documentoCredor": "06085013876",
+        "nome": "ANILTON APARECIDO DOS SANTOS"
+      },
+      "parecerista": null,
+      "mesa": "PARCERIA",
+      "tipoCredorProposta": "ORIGINARIO",
+      "responsavel": {
+        "id": 169,
+        "email": "yasmin.bispo@addebitare.com.br",
+        "nome": "Yasmin Bispo"
+      },
+      "supervisor": null,
+      "dalacodeId": "6950",
+      "currentStage": "CALCULO",
+      "currentStageStatus": "EM_ANDAMENTO",
+      "pendencia": false
+    },
+    {
+      "id": 1290,
+      "createdAt": "2026-02-25T15:13:59.759Z",
+      "updatedAt": "2026-02-25T15:16:19.692Z",
+      "credor": {
+        "id": 674376,
+        "documentoCredor": "15128329879",
+        "nome": "EMERSON FERREIRA LIMA"
+      },
+      "parecerista": null,
+      "mesa": "PARCERIA",
+      "tipoCredorProposta": "ORIGINARIO",
+      "responsavel": {
+        "id": 219,
+        "email": "leticia.silveira@addebitare.com.br",
+        "nome": "Leticia Ferreira da Silveira"
+      },
+      "supervisor": null,
+      "dalacodeId": "6949",
+      "currentStage": "CALCULO",
+      "currentStageStatus": "REPROVADO",
+      "pendencia": false
+    },
+    {
+      "id": 1289,
+      "createdAt": "2026-02-25T15:12:33.900Z",
+      "updatedAt": "2026-02-26T12:33:43.200Z",
+      "credor": {
+        "id": 665754,
+        "documentoCredor": "47909641834",
+        "nome": "MADALENA MIKIKO NAGAI"
+      },
+      "parecerista": null,
+      "mesa": "PARCERIA",
+      "tipoCredorProposta": "ORIGINARIO",
+      "responsavel": {
+        "id": 86,
+        "email": "daniel.pedroso@addebitare.com.br",
+        "nome": "Daniel Pedroso"
+      },
+      "supervisor": null,
+      "dalacodeId": "6961",
+      "currentStage": "CALCULO",
+      "currentStageStatus": "EM_ANDAMENTO",
+      "pendencia": false
+    },
+    {
+      "id": 1288,
+      "createdAt": "2026-02-25T15:05:00.800Z",
+      "updatedAt": "2026-02-26T17:06:15.532Z",
+      "credor": {
+        "id": 665763,
+        "documentoCredor": "09969829149",
+        "nome": "ALDENOR CAMPELO DA SILVA"
+      },
+      "parecerista": null,
+      "mesa": "FEDERAL",
+      "tipoCredorProposta": "ORIGINARIO",
+      "responsavel": {
+        "id": 147,
+        "email": "michelle.cravo@addebitare.com.br",
+        "nome": "Michelle Cravo"
+      },
+      "supervisor": {
+        "id": 513,
+        "email": "tabata.bomfim@addebitare.com.br",
+        "nome": "Tabata Bomfim"
+      },
+      "dalacodeId": "6948",
+      "currentStage": "PARECER_PROCESSO",
+      "currentStageStatus": "EM_ANDAMENTO",
+      "pendencia": false
+    },
+    {
+      "id": 1287,
+      "createdAt": "2026-02-25T15:03:11.910Z",
+      "updatedAt": "2026-02-26T17:23:25.393Z",
+      "credor": {
+        "id": 18819,
+        "documentoCredor": "13088992899",
+        "nome": "JEAN WASHINGTON DE OLIVEIRA"
+      },
+      "parecerista": null,
+      "mesa": "MUNICIPAL",
+      "tipoCredorProposta": "ORIGINARIO",
+      "responsavel": {
+        "id": 20,
+        "email": "lucas.freitas@addebitare.com.br",
+        "nome": "Lucas Freitas"
+      },
+      "supervisor": null,
+      "dalacodeId": "6947",
+      "currentStage": "DUE_DILIGENCE",
+      "currentStageStatus": "EM_ANDAMENTO",
+      "pendencia": false
+    },
+    {
+      "id": 1286,
+      "createdAt": "2026-02-25T15:00:20.274Z",
+      "updatedAt": "2026-02-26T15:09:25.169Z",
+      "credor": {
+        "id": 665058,
+        "documentoCredor": "23925833153",
+        "nome": "CIDVALDO DE OLIVEIRA VICENTE"
+      },
+      "parecerista": null,
+      "mesa": "PARCERIA",
+      "tipoCredorProposta": "ORIGINARIO",
+      "responsavel": {
+        "id": 169,
+        "email": "yasmin.bispo@addebitare.com.br",
+        "nome": "Yasmin Bispo"
+      },
+      "supervisor": null,
+      "dalacodeId": "6946",
+      "currentStage": "PARECER_PROCESSO",
+      "currentStageStatus": "EM_ANDAMENTO",
+      "pendencia": false
+    },
+    {
+      "id": 1285,
+      "createdAt": "2026-02-25T14:57:57.493Z",
+      "updatedAt": "2026-02-26T15:09:06.467Z",
+      "credor": {
+        "id": 432804,
+        "documentoCredor": "27317251844",
+        "nome": "CESAR TADEU OSMUNDO NOVO"
+      },
+      "parecerista": null,
+      "mesa": "PARCERIA",
+      "tipoCredorProposta": "ORIGINARIO",
+      "responsavel": {
+        "id": 219,
+        "email": "leticia.silveira@addebitare.com.br",
+        "nome": "Leticia Ferreira da Silveira"
+      },
+      "supervisor": null,
+      "dalacodeId": "6945",
+      "currentStage": "INAPTO",
+      "currentStageStatus": null,
+      "pendencia": false
+    },
+    {
+      "id": 1284,
+      "createdAt": "2026-02-25T14:53:36.170Z",
+      "updatedAt": "2026-02-26T15:29:09.999Z",
+      "credor": {
+        "id": 667147,
+        "documentoCredor": "29543550930",
+        "nome": "OSSIMAR JORGE DE FREITAS"
+      },
+      "parecerista": null,
+      "mesa": "FEDERAL",
+      "tipoCredorProposta": "ORIGINARIO",
+      "responsavel": {
+        "id": 174,
+        "email": "jeane.silva@addebitare.com.br",
+        "nome": "Jeane Silva"
+      },
+      "supervisor": {
+        "id": 513,
+        "email": "tabata.bomfim@addebitare.com.br",
+        "nome": "Tabata Bomfim"
+      },
+      "dalacodeId": "6944",
+      "currentStage": "PARECER_PROCESSO",
+      "currentStageStatus": "EM_ANDAMENTO",
+      "pendencia": false
+    },
+    {
+      "id": 1283,
+      "createdAt": "2026-02-25T14:17:28.774Z",
+      "updatedAt": "2026-02-25T17:18:58.458Z",
+      "credor": {
+        "id": 664495,
+        "documentoCredor": "95848037272",
+        "nome": "ANDREZA INGRID LIMA BRITO"
+      },
+      "parecerista": null,
+      "mesa": "FEDERAL",
+      "tipoCredorProposta": "HONORARIO_CONTRATUAL",
+      "responsavel": {
+        "id": 196,
+        "email": "vitor.souza@addebitare.com.br",
+        "nome": "Vitor Cuba"
+      },
+      "supervisor": {
+        "id": 513,
+        "email": "tabata.bomfim@addebitare.com.br",
+        "nome": "Tabata Bomfim"
+      },
+      "dalacodeId": "6943",
+      "currentStage": "CALCULO",
+      "currentStageStatus": "REPROVADO",
+      "pendencia": false
+    },
+    {
+      "id": 1282,
+      "createdAt": "2026-02-25T12:23:15.541Z",
+      "updatedAt": "2026-02-26T17:04:01.996Z",
+      "credor": {
+        "id": 414038,
+        "documentoCredor": "04713049808",
+        "nome": "DIRCE MOLINA DE FREITAS"
+      },
+      "parecerista": null,
+      "mesa": "MUNICIPAL",
+      "tipoCredorProposta": "ORIGINARIO",
+      "responsavel": {
+        "id": 220,
+        "email": "thayna.lopes@addebitare.com.br",
+        "nome": "Thayna Lopes"
+      },
+      "supervisor": null,
+      "dalacodeId": "6942",
+      "currentStage": "PARECER_PROCESSO",
+      "currentStageStatus": "EM_ANDAMENTO",
+      "pendencia": false
+    },
+    {
+      "id": 1281,
+      "createdAt": "2026-02-25T11:37:47.285Z",
+      "updatedAt": "2026-02-26T13:56:17.209Z",
+      "credor": {
+        "id": 209235,
+        "documentoCredor": "01604792825",
+        "nome": "Viviane Tegao"
+      },
+      "parecerista": null,
+      "mesa": "MUNICIPAL",
+      "tipoCredorProposta": "ORIGINARIO",
+      "responsavel": {
+        "id": 20,
+        "email": "lucas.freitas@addebitare.com.br",
+        "nome": "Lucas Freitas"
+      },
+      "supervisor": null,
+      "dalacodeId": "6941",
+      "currentStage": "PARECER_PROCESSO",
+      "currentStageStatus": "EM_ANDAMENTO",
+      "pendencia": false
+    },
+    {
+      "id": 1280,
+      "createdAt": "2026-02-25T11:16:26.280Z",
+      "updatedAt": "2026-02-26T14:38:25.235Z",
+      "credor": {
+        "id": 662886,
+        "documentoCredor": "04264720397",
+        "nome": "JOSE SARTO MAMEDE AGUIAR"
+      },
+      "parecerista": {
+        "id": 58,
+        "email": "luan.eleuterio@addebitare.com.br",
+        "nome": "Luan Eleutério"
+      },
+      "mesa": "MUNICIPAL",
+      "tipoCredorProposta": "ORIGINARIO",
+      "responsavel": {
+        "id": 234,
+        "email": "eduardo.marques@addebitare.com.br",
+        "nome": "Eduardo Marques"
+      },
+      "supervisor": null,
+      "dalacodeId": "6940",
+      "currentStage": "PARECER_PROCESSO",
+      "currentStageStatus": "EM_ANDAMENTO",
+      "pendencia": false
+    },
+    {
+      "id": 1279,
+      "createdAt": "2026-02-25T10:22:02.199Z",
+      "updatedAt": "2026-02-26T14:37:31.521Z",
+      "credor": {
+        "id": 665757,
+        "documentoCredor": "42918160814",
+        "nome": "SAMUEL CANELA DA SILVA"
+      },
+      "parecerista": {
+        "id": 58,
+        "email": "luan.eleuterio@addebitare.com.br",
+        "nome": "Luan Eleutério"
+      },
+      "mesa": "PARCERIA",
+      "tipoCredorProposta": "ORIGINARIO",
+      "responsavel": {
+        "id": 169,
+        "email": "yasmin.bispo@addebitare.com.br",
+        "nome": "Yasmin Bispo"
+      },
+      "supervisor": null,
+      "dalacodeId": "6939",
+      "currentStage": "PARECER_PROCESSO",
+      "currentStageStatus": "EM_ANDAMENTO",
+      "pendencia": false
+    },
+    {
+      "id": 1278,
+      "createdAt": "2026-02-25T10:08:05.379Z",
+      "updatedAt": "2026-02-26T10:07:56.540Z",
+      "credor": {
+        "id": 654851,
+        "documentoCredor": "11563250802",
+        "nome": "Luzia Feitosa"
+      },
+      "parecerista": {
+        "id": 467,
+        "email": "gabriel.aragaki@addebitare.com.br",
+        "nome": "Gabriel Aragaki"
+      },
+      "mesa": "PARCERIA",
+      "tipoCredorProposta": "ORIGINARIO",
+      "responsavel": {
+        "id": 12,
+        "email": "lucas.expedito@addebitare.com.br",
+        "nome": "Lucas Expedito"
+      },
+      "supervisor": null,
+      "dalacodeId": "6938",
+      "currentStage": "PARECER_PROCESSO",
+      "currentStageStatus": "EM_ANDAMENTO",
+      "pendencia": false
+    },
+    {
+      "id": 1277,
+      "createdAt": "2026-02-24T17:52:21.324Z",
+      "updatedAt": "2026-02-24T17:55:41.151Z",
+      "credor": {
+        "id": 669703,
+        "documentoCredor": "22072775850",
+        "nome": "CRISTIAN CLEBER DE JESUS VILLELA"
+      },
+      "parecerista": null,
+      "mesa": "PARCERIA",
+      "tipoCredorProposta": "ORIGINARIO",
+      "responsavel": {
+        "id": 211,
+        "email": "fabio.lopes@addebitare.com.br",
+        "nome": "Fabio Lopes"
+      },
+      "supervisor": null,
+      "dalacodeId": "6937",
+      "currentStage": "CALCULO",
+      "currentStageStatus": "REPROVADO",
+      "pendencia": false
+    },
+    {
+      "id": 1276,
+      "createdAt": "2026-02-24T16:20:55.875Z",
+      "updatedAt": "2026-02-26T11:51:53.784Z",
+      "credor": {
+        "id": 90010,
+        "documentoCredor": "08323758883",
+        "nome": "VALDIMIR TIBURCIO DA SILVA"
+      },
+      "parecerista": null,
+      "mesa": "PARCERIA",
+      "tipoCredorProposta": "ORIGINARIO",
+      "responsavel": {
+        "id": 169,
+        "email": "yasmin.bispo@addebitare.com.br",
+        "nome": "Yasmin Bispo"
+      },
+      "supervisor": null,
+      "dalacodeId": "6936",
+      "currentStage": "PARECER_PROCESSO",
+      "currentStageStatus": "EM_ANDAMENTO",
+      "pendencia": false
+    },
+    {
+      "id": 1275,
+      "createdAt": "2026-02-24T16:16:35.435Z",
+      "updatedAt": "2026-02-24T16:26:59.002Z",
+      "credor": {
+        "id": 654867,
+        "documentoCredor": "10402267877",
+        "nome": "Antônio Celso Baeta Minhoto"
+      },
+      "parecerista": null,
+      "mesa": "PARCERIA",
+      "tipoCredorProposta": "ORIGINARIO",
+      "responsavel": {
+        "id": 169,
+        "email": "yasmin.bispo@addebitare.com.br",
+        "nome": "Yasmin Bispo"
+      },
+      "supervisor": null,
+      "dalacodeId": null,
+      "currentStage": "INCOMPLETO",
+      "currentStageStatus": "EM_ANDAMENTO",
+      "pendencia": true
+    },
+    {
+      "id": 1274,
+      "createdAt": "2026-02-24T15:49:34.319Z",
+      "updatedAt": "2026-02-26T14:44:40.352Z",
+      "credor": {
+        "id": 228974,
+        "documentoCredor": "07046189820",
+        "nome": "Isaias Sodre de Nobrega"
+      },
+      "parecerista": null,
+      "mesa": "PARCERIA",
+      "tipoCredorProposta": "ORIGINARIO",
+      "responsavel": {
+        "id": 169,
+        "email": "yasmin.bispo@addebitare.com.br",
+        "nome": "Yasmin Bispo"
+      },
+      "supervisor": null,
+      "dalacodeId": "6935",
+      "currentStage": "PARECER_PROCESSO",
+      "currentStageStatus": "EM_ANDAMENTO",
+      "pendencia": false
+    },
+    {
+      "id": 1273,
+      "createdAt": "2026-02-24T15:19:55.838Z",
+      "updatedAt": "2026-02-26T11:50:10.847Z",
+      "credor": {
+        "id": 674389,
+        "documentoCredor": "59148390844",
+        "nome": "MARIA BEATRIZ AZEVEDO SILVA DE ATAIDE PAIVA"
+      },
+      "parecerista": null,
+      "mesa": "PARCERIA",
+      "tipoCredorProposta": "HERDEIRO",
+      "responsavel": {
+        "id": 169,
+        "email": "yasmin.bispo@addebitare.com.br",
+        "nome": "Yasmin Bispo"
+      },
+      "supervisor": null,
+      "dalacodeId": "6934",
+      "currentStage": "INAPTO",
+      "currentStageStatus": null,
+      "pendencia": false
+    },
+    {
+      "id": 1272,
+      "createdAt": "2026-02-24T15:19:40.887Z",
+      "updatedAt": "2026-02-26T10:04:51.206Z",
+      "credor": {
+        "id": 674388,
+        "documentoCredor": "03788002727",
+        "nome": "RICARDO LEITE SILVA"
+      },
+      "parecerista": {
+        "id": 604,
+        "email": "escritorio.externo+bsa@addebitare.com.br",
+        "nome": "BSA - Escritório Externo"
+      },
+      "mesa": "PARCERIA",
+      "tipoCredorProposta": "HERDEIRO",
+      "responsavel": {
+        "id": 211,
+        "email": "fabio.lopes@addebitare.com.br",
+        "nome": "Fabio Lopes"
+      },
+      "supervisor": null,
+      "dalacodeId": "6932",
+      "currentStage": "PARECER_PROCESSO",
+      "currentStageStatus": "EM_ANDAMENTO",
+      "pendencia": false
+    },
+    {
+      "id": 1271,
+      "createdAt": "2026-02-24T15:05:29.572Z",
+      "updatedAt": "2026-02-24T15:08:07.675Z",
+      "credor": {
+        "id": 367787,
+        "documentoCredor": "05563023893",
+        "nome": "MARIA APARECIDA MOREIRA DE SOUZA"
+      },
+      "parecerista": null,
+      "mesa": "PARCERIA",
+      "tipoCredorProposta": "ORIGINARIO",
+      "responsavel": {
+        "id": 219,
+        "email": "leticia.silveira@addebitare.com.br",
+        "nome": "Leticia Ferreira da Silveira"
+      },
+      "supervisor": null,
+      "dalacodeId": "6931",
+      "currentStage": "CALCULO",
+      "currentStageStatus": "EM_ANDAMENTO",
+      "pendencia": false
+    },
+    {
+      "id": 1270,
+      "createdAt": "2026-02-24T14:47:59.380Z",
+      "updatedAt": "2026-02-26T10:18:28.284Z",
+      "credor": {
+        "id": 354846,
+        "documentoCredor": "09309711833",
+        "nome": "Ana Zelia Lucianelli"
+      },
+      "parecerista": {
+        "id": 430,
+        "email": "maria.alice@addebitare.com.br",
+        "nome": "Maria Alice"
+      },
+      "mesa": "MUNICIPAL",
+      "tipoCredorProposta": "ORIGINARIO",
+      "responsavel": {
+        "id": 200,
+        "email": "sullene.santos@addebitare.com.br",
+        "nome": "Sullene Santos"
+      },
+      "supervisor": null,
+      "dalacodeId": "6930",
+      "currentStage": "PARECER_PROCESSO",
+      "currentStageStatus": "EM_ANDAMENTO",
+      "pendencia": false
+    },
+    {
+      "id": 1269,
+      "createdAt": "2026-02-24T14:13:53.772Z",
+      "updatedAt": "2026-02-26T15:52:43.073Z",
+      "credor": {
+        "id": 488978,
+        "documentoCredor": "96509376334",
+        "nome": "DANILO OLIVEIRA ARAUJO"
+      },
+      "parecerista": {
+        "id": 604,
+        "email": "escritorio.externo+bsa@addebitare.com.br",
+        "nome": "BSA - Escritório Externo"
+      },
+      "mesa": "FEDERAL",
+      "tipoCredorProposta": "ORIGINARIO",
+      "responsavel": {
+        "id": 189,
+        "email": "joana.domingos@addebitare.com.br",
+        "nome": "Joana Darc Domingos Araújo"
+      },
+      "supervisor": {
+        "id": 513,
+        "email": "tabata.bomfim@addebitare.com.br",
+        "nome": "Tabata Bomfim"
+      },
+      "dalacodeId": "6926",
+      "currentStage": "PARECER_PROCESSO",
+      "currentStageStatus": "EM_ANDAMENTO",
+      "pendencia": false
+    },
+    {
+      "id": 1268,
+      "createdAt": "2026-02-24T13:28:38.853Z",
+      "updatedAt": "2026-02-26T10:00:27.809Z",
+      "credor": {
+        "id": 650048,
+        "documentoCredor": "28371786832",
+        "nome": "ANA PAULA ANTUNES DE PAULA SANTOS"
+      },
+      "parecerista": {
+        "id": 454,
+        "email": "erick.amaral@addebitare.com.br",
+        "nome": "Erick do Amaral"
+      },
+      "mesa": "PARCERIA",
+      "tipoCredorProposta": "ORIGINARIO",
+      "responsavel": {
+        "id": 169,
+        "email": "yasmin.bispo@addebitare.com.br",
+        "nome": "Yasmin Bispo"
+      },
+      "supervisor": null,
+      "dalacodeId": "6933",
+      "currentStage": "PARECER_PROCESSO",
+      "currentStageStatus": "EM_ANDAMENTO",
+      "pendencia": false
+    },
+    {
+      "id": 1267,
+      "createdAt": "2026-02-24T12:43:34.715Z",
+      "updatedAt": "2026-02-26T15:46:59.962Z",
+      "credor": {
+        "id": 98163,
+        "documentoCredor": "30964585880",
+        "nome": "LUCIANA CLEMENTE CARNEIRO"
+      },
+      "parecerista": {
+        "id": 58,
+        "email": "luan.eleuterio@addebitare.com.br",
+        "nome": "Luan Eleutério"
+      },
+      "mesa": "MUNICIPAL",
+      "tipoCredorProposta": "ORIGINARIO",
+      "responsavel": {
+        "id": 220,
+        "email": "thayna.lopes@addebitare.com.br",
+        "nome": "Thayna Lopes"
+      },
+      "supervisor": null,
+      "dalacodeId": "6924",
+      "currentStage": "PARECER_PROCESSO",
+      "currentStageStatus": "EM_ANDAMENTO",
+      "pendencia": false
+    },
+    {
+      "id": 1266,
+      "createdAt": "2026-02-24T12:41:28.994Z",
+      "updatedAt": "2026-02-26T15:43:37.484Z",
+      "credor": {
+        "id": 669007,
+        "documentoCredor": "06985572472",
+        "nome": "JARBAS DE SOUZA MOREIRA"
+      },
+      "parecerista": {
+        "id": 58,
+        "email": "luan.eleuterio@addebitare.com.br",
+        "nome": "Luan Eleutério"
+      },
+      "mesa": "PARCERIA",
+      "tipoCredorProposta": "ORIGINARIO",
+      "responsavel": {
+        "id": 169,
+        "email": "yasmin.bispo@addebitare.com.br",
+        "nome": "Yasmin Bispo"
+      },
+      "supervisor": null,
+      "dalacodeId": "6923",
+      "currentStage": "PARECER_PROCESSO",
+      "currentStageStatus": "EM_ANDAMENTO",
+      "pendencia": false
+    },
+    {
+      "id": 1265,
+      "createdAt": "2026-02-24T12:14:21.507Z",
+      "updatedAt": "2026-02-26T11:49:24.210Z",
+      "credor": {
+        "id": 674379,
+        "documentoCredor": "25240073830",
+        "nome": "RODRIGO PIRES ROXO"
+      },
+      "parecerista": null,
+      "mesa": "PARCERIA",
+      "tipoCredorProposta": "HERDEIRO",
+      "responsavel": {
+        "id": 169,
+        "email": "yasmin.bispo@addebitare.com.br",
+        "nome": "Yasmin Bispo"
+      },
+      "supervisor": null,
+      "dalacodeId": "6922",
+      "currentStage": "INAPTO",
+      "currentStageStatus": null,
+      "pendencia": false
+    },
+    {
+      "id": 1264,
+      "createdAt": "2026-02-24T11:55:49.439Z",
+      "updatedAt": "2026-02-26T10:44:36.116Z",
+      "credor": {
+        "id": 674378,
+        "documentoCredor": "47286773895",
+        "nome": "ELLEN ROBLEDO DA COSTA"
+      },
+      "parecerista": {
+        "id": 453,
+        "email": "relandra.oliveira@addebitare.com.br",
+        "nome": "Relandra Oliveira"
+      },
+      "mesa": "MUNICIPAL",
+      "tipoCredorProposta": "HERDEIRO",
+      "responsavel": {
+        "id": 553,
+        "email": "jessica.matoso@addebitare.com.br",
+        "nome": "Jessica Matoso"
+      },
+      "supervisor": null,
+      "dalacodeId": "6927",
+      "currentStage": "PARECER_PROCESSO",
+      "currentStageStatus": "EM_ANDAMENTO",
+      "pendencia": false
+    },
+    {
+      "id": 1263,
+      "createdAt": "2026-02-24T11:53:10.023Z",
+      "updatedAt": "2026-02-26T15:53:55.391Z",
+      "credor": {
+        "id": 674377,
+        "documentoCredor": "47286731890",
+        "nome": "LIVIA ROBLEDO DA COSTA"
+      },
+      "parecerista": {
+        "id": 453,
+        "email": "relandra.oliveira@addebitare.com.br",
+        "nome": "Relandra Oliveira"
+      },
+      "mesa": "MUNICIPAL",
+      "tipoCredorProposta": "HERDEIRO",
+      "responsavel": {
+        "id": 553,
+        "email": "jessica.matoso@addebitare.com.br",
+        "nome": "Jessica Matoso"
+      },
+      "supervisor": null,
+      "dalacodeId": "6928",
+      "currentStage": "PARECER_PROCESSO",
+      "currentStageStatus": "EM_ANDAMENTO",
+      "pendencia": false
+    },
+    {
+      "id": 1262,
+      "createdAt": "2026-02-24T11:41:28.784Z",
+      "updatedAt": "2026-02-26T10:45:18.310Z",
+      "credor": {
+        "id": 111799,
+        "documentoCredor": "11831457806",
+        "nome": "ELISABETE ROBLEDO"
+      },
+      "parecerista": {
+        "id": 453,
+        "email": "relandra.oliveira@addebitare.com.br",
+        "nome": "Relandra Oliveira"
+      },
+      "mesa": "MUNICIPAL",
+      "tipoCredorProposta": "HERDEIRO",
+      "responsavel": {
+        "id": 553,
+        "email": "jessica.matoso@addebitare.com.br",
+        "nome": "Jessica Matoso"
+      },
+      "supervisor": null,
+      "dalacodeId": "6929",
+      "currentStage": "PARECER_PROCESSO",
+      "currentStageStatus": "EM_ANDAMENTO",
+      "pendencia": false
+    },
+    {
+      "id": 1261,
+      "createdAt": "2026-02-24T11:11:41.900Z",
+      "updatedAt": "2026-02-26T15:43:37.486Z",
+      "credor": {
+        "id": 13425,
+        "documentoCredor": "24583150890",
+        "nome": "ADRIANA RAMALHO DE SOUZA DIAS"
+      },
+      "parecerista": {
+        "id": 58,
+        "email": "luan.eleuterio@addebitare.com.br",
+        "nome": "Luan Eleutério"
+      },
+      "mesa": "MUNICIPAL",
+      "tipoCredorProposta": "ORIGINARIO",
+      "responsavel": {
+        "id": 200,
+        "email": "sullene.santos@addebitare.com.br",
+        "nome": "Sullene Santos"
+      },
+      "supervisor": null,
+      "dalacodeId": "6921",
+      "currentStage": "DUE_DILIGENCE",
+      "currentStageStatus": "PENDENCIA",
+      "pendencia": true
+    }
+  ],
+  "meta": {
+    "totalItems": 6592,
+    "itemCount": 50,
+    "itemsPerPage": 50,
+    "totalPages": 132,
+    "currentPage": 1
+  }
+}

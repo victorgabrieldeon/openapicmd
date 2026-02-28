@@ -11,8 +11,9 @@ import { JsonTree } from './JsonTree.js';
 import { hasTokenCached } from '../../lib/executor.js';
 import { useApp, useActiveEnvironment } from '../../context/AppContext.js';
 import { saveRequest } from '../../lib/saved-requests.js';
-import { FAKER_ENTRIES } from '../../lib/faker.js';
+import { FAKER_ENTRIES, suggestFakerForField } from '../../lib/faker.js';
 import { parseCurl, extractPathParams } from '../../lib/curl-parser.js';
+import { getPastParamValues } from '../../lib/history.js';
 
 interface RequestFormProps {
   endpoint: Endpoint;
@@ -394,6 +395,8 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
   const [importOpen, setImportOpen] = useState(false);
   const [importInput, setImportInput] = useState('');
   const [importError, setImportError] = useState('');
+  const [histCompValues, setHistCompValues] = useState<string[]>([]);
+  const [histCompIdx, setHistCompIdx] = useState(-1);
 
   // Navigation fields — group headers navigable as body-group:key, children skipped when group is collapsed
   const fields = useMemo(() => {
@@ -458,6 +461,20 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
       return fields[next] ?? cur;
     });
   }, [fields]);
+
+  // Load history completion values when entering edit mode on a path/query param
+  useEffect(() => {
+    if (!editingField || (!editingField.startsWith('path:') && !editingField.startsWith('query:'))) {
+      setHistCompValues([]);
+      setHistCompIdx(-1);
+      return;
+    }
+    const isPath = editingField.startsWith('path:');
+    const paramName = isPath ? editingField.slice(5) : editingField.slice(6);
+    const vals = getPastParamValues(endpoint.id, isPath ? 'pathParams' : 'queryParams', paramName);
+    setHistCompValues(vals);
+    setHistCompIdx(-1);
+  }, [editingField, endpoint.id]);
 
   const effectiveBaseUrl = env?.baseUrl ?? baseUrlInput.trim();
 
@@ -612,6 +629,46 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
     }
   }, [focusedField]);
 
+  // Fill the currently-editing param field (used by history completion Ctrl+↑↓)
+  const setEditingFieldValue = useCallback((val: string) => {
+    if (!editingField) return;
+    if (editingField.startsWith('path:'))  setPathValues((p)  => ({ ...p, [editingField.slice(5)]: val }));
+    if (editingField.startsWith('query:')) setQueryValues((p) => ({ ...p, [editingField.slice(6)]: val }));
+  }, [editingField]);
+
+  // Compute a smart auto-fill suggestion for an empty field (feature 3)
+  const computeFieldSuggestion = useCallback((field: string): string | null => {
+    if (field.startsWith('body:')) {
+      const fKey = field.slice(5);
+      if (bodyFieldValues[fKey]) return null;
+      const def = bodyFieldDefs.find((d) => d.fullKey === fKey && !d.isGroupHeader);
+      if (!def) return null;
+      if (def.example !== undefined) return String(def.example);
+      return suggestFakerForField(def.label, def.type, def.format, def.enumValues);
+    }
+    if (field.startsWith('path:')) {
+      const name = field.slice(5);
+      if (pathValues[name]) return null;
+      const p = pathParams.find((x) => x.name === name);
+      if (!p) return null;
+      const ex = p.schema?.['example'];
+      if (ex !== undefined) return String(ex);
+      if (p.default) return p.default;
+      return suggestFakerForField(name, p.type, p.schema?.['format'] as string | undefined);
+    }
+    if (field.startsWith('query:')) {
+      const name = field.slice(6);
+      if (queryValues[name]) return null;
+      const p = queryParams.find((x) => x.name === name);
+      if (!p) return null;
+      const ex = p.schema?.['example'];
+      if (ex !== undefined) return String(ex);
+      if (p.default) return p.default;
+      return suggestFakerForField(name, p.type, p.schema?.['format'] as string | undefined);
+    }
+    return null;
+  }, [bodyFieldValues, bodyFieldDefs, pathValues, queryValues, pathParams, queryParams]);
+
   const insertVar = useCallback((varName: string) => {
     const placeholder = `{{${varName}}}`;
     if (focusedField.startsWith('body:')) {
@@ -698,6 +755,15 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
 
     if (editingField !== null) {
       if (key.ctrl && key.return) { void handleSubmit(); return; }
+      // Ctrl+↑↓: cycle through history values for path/query params (feature 7)
+      if (key.ctrl && (key.upArrow || key.downArrow) && histCompValues.length > 0) {
+        const newIdx = key.upArrow
+          ? (histCompIdx <= 0 ? histCompValues.length - 1 : histCompIdx - 1)
+          : (histCompIdx + 1) % histCompValues.length;
+        setHistCompIdx(newIdx);
+        setEditingFieldValue(histCompValues[newIdx]!);
+        return;
+      }
       if (key.return) { setEditingField(null); moveFocus(1); return; }
       if (key.escape) { setEditingField(null); return; }
 
@@ -907,7 +973,13 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
     if (input === 'h') { dispatch({ type: 'OPEN_MODAL', modal: 'history' }); return; }
     if (input === 's') { setSaveMode(true); setSaveName(`${endpoint.method.toUpperCase()} ${endpoint.path}`); return; }
     if (input === 'S') { dispatch({ type: 'OPEN_MODAL', modal: 'saved-requests' }); return; }
-    if (key.tab && !key.shift) { moveFocus(1); return; }
+    if (key.tab && !key.shift) {
+      // Feature 3: smart fill — auto-fill empty fields before advancing focus
+      const suggestion = computeFieldSuggestion(focusedField);
+      if (suggestion !== null) insertFakerValue(suggestion);
+      moveFocus(1);
+      return;
+    }
     if ((key.tab && key.shift) || key.upArrow) { moveFocus(-1); return; }
     if (key.downArrow) { moveFocus(1); return; }
     if (key.return) {
@@ -988,7 +1060,11 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
           {saveMode
             ? <Text color="yellow">{'Save as: '}</Text>
             : editingField
-            ? <Text color="gray">{'[Enter] confirm  [Esc] cancel edit  [Ctrl+Enter] send'}</Text>
+            ? <Text wrap="truncate" color="gray">{
+                histCompValues.length > 0
+                  ? `[^↵] send  [^↑↓] history: ${histCompValues.slice(0, 5).join('  ·  ')}  [↵] confirm  [Esc] cancel`
+                  : '[Enter] confirm  [Esc] cancel  [Ctrl+Enter] send'
+              }</Text>
             : <Text wrap="truncate" color="gray">{
                 `[↑↓] nav  [↵] edit  [^↵] send  [i] cURL  [s] save  [h] hist  [f] fake${hasSpecExamples ? '  [e] examples' : ''}${envVarEntries.length > 0 ? '  [v] vars' : ''}  [Esc]`
               }</Text>

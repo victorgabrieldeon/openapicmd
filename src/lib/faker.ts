@@ -196,3 +196,53 @@ export const FAKER_ENTRIES: FakerEntry[] = [
   { id: 'inteiro',       category: 'Geral',    label: 'Número inteiro',     generate: genInteiro },
   { id: 'decimal',       category: 'Geral',    label: 'Número decimal',     generate: genDecimal },
 ];
+
+/** Auto-suggest a faker value for a form field based on name + schema hints.
+ *  Returns null when no heuristic matches. */
+export function suggestFakerForField(
+  fieldName: string,
+  type: string,
+  format?: string,
+  enumValues?: string[]
+): string | null {
+  if (enumValues?.length) return enumValues[0]!;
+
+  const n = fieldName.toLowerCase();
+
+  // Format-based (authoritative)
+  if (format === 'date-time') return genDatetime();
+  if (format === 'date')      return genData();
+  if (format === 'email')     return genEmail();
+  if (format === 'uuid')      return genUuid();
+
+  // Brazilian documents
+  if (n.includes('cpf'))  return (n.includes('raw') || n.includes('sem')) ? genCpfRaw()  : genCpf();
+  if (n.includes('cnpj')) return (n.includes('raw') || n.includes('sem')) ? genCnpjRaw() : genCnpj();
+  if (n.includes('cep') || n === 'zip' || n.includes('postal')) return genCep();
+
+  // Contact
+  if (n.includes('email') || n.includes('e-mail')) return genEmail();
+  if (n.includes('celular') || n.includes('mobile') || n.includes('whatsapp')) return genCelular();
+  if (n.includes('telefone') || n.includes('phone') || n.includes('fone'))     return genTelefone();
+
+  // Names
+  if (n === 'nome' || n === 'name' || n === 'fullname' || n === 'full_name' || n.endsWith('_nome') || n.endsWith('_name')) return genNome();
+  if (n.includes('primeiro') || n === 'first_name' || n === 'firstname') return genPrimeiroNome();
+  if (n.includes('sobrenome') || n === 'last_name'  || n === 'lastname')  return genSobrenome();
+
+  // Dates
+  if (n.endsWith('_at') || n.endsWith('date') || n.endsWith('_data') || n === 'data' || n === 'date') {
+    return (type.includes('time') || n.includes('hora') || n.includes('time')) ? genDatetime() : genData();
+  }
+
+  // UUIDs / generic IDs
+  if (n === 'id' || n === 'uuid' || n.endsWith('_id') || n.endsWith('_uuid')) return genUuid();
+
+  // Type-based fallback
+  const base = type.replace('?', '').replace('[]', '');
+  if (base === 'integer') return genInteiro();
+  if (base === 'number')  return genDecimal();
+  if (base === 'boolean') return 'true';
+
+  return null;
+}

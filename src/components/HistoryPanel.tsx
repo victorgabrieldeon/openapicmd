@@ -1,8 +1,10 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { Box, Text, useInput } from 'ink';
+import TextInput from 'ink-text-input';
 import { useApp } from '../context/AppContext.js';
 import { getHistory, removeFromHistory, clearHistory, relativeTime, type HistoryEntry } from '../lib/history.js';
 import { preFillFormCache } from './detail/RequestForm.js';
+import { saveRequest } from '../lib/saved-requests.js';
 
 function methodColor(method: string): string {
   switch (method.toUpperCase()) {
@@ -29,6 +31,8 @@ export function HistoryPanel({ height }: { height: number }) {
   const [cursor, setCursor] = useState(0);
   const [scrollOff, setScrollOff] = useState(0);
   const [confirmClear, setConfirmClear] = useState(false);
+  const [savingEntry, setSavingEntry] = useState<HistoryEntry | null>(null);
+  const [saveNameInput, setSaveNameInput] = useState('');
 
   // Refresh entries when panel opens
   useEffect(() => {
@@ -82,6 +86,28 @@ export function HistoryPanel({ height }: { height: number }) {
   }, [entries.length]);
 
   useInput((input, key) => {
+    // Save-as mode
+    if (savingEntry !== null) {
+      if (key.return) {
+        const name = saveNameInput.trim() || `${savingEntry.method.toUpperCase()} ${savingEntry.path}`;
+        saveRequest({
+          name,
+          endpointId: savingEntry.endpointId,
+          method: savingEntry.method,
+          path: savingEntry.path,
+          envName: savingEntry.envName,
+          values: savingEntry.values,
+          bodyFieldValues: savingEntry.bodyFieldValues,
+        });
+        setSavingEntry(null);
+        setSaveNameInput('');
+      } else if (key.escape) {
+        setSavingEntry(null);
+        setSaveNameInput('');
+      }
+      return;
+    }
+
     if (confirmClear) {
       if (input === 'y') {
         clearHistory();
@@ -106,6 +132,14 @@ export function HistoryPanel({ height }: { height: number }) {
       if (entry) deleteEntry(entry.id);
       return;
     }
+    if (input === 's') {
+      const entry = entries[cursor];
+      if (entry) {
+        setSavingEntry(entry);
+        setSaveNameInput(`${entry.method.toUpperCase()} ${entry.path}`);
+      }
+      return;
+    }
     if (input === 'c') {
       if (entries.length > 0) setConfirmClear(true);
       return;
@@ -122,8 +156,19 @@ export function HistoryPanel({ height }: { height: number }) {
       {/* Header */}
       <Box marginBottom={1}>
         <Text bold color="cyan">{'HISTORY  '}</Text>
-        <Text color="gray">{'[↑↓] navigate  [Enter] load  [d] delete  [c] clear all  [Esc] close'}</Text>
+        {savingEntry !== null ? (
+          <Text color="gray">{'[Enter] confirm  [Esc] cancel'}</Text>
+        ) : (
+          <Text color="gray">{'[↑↓] nav  [Enter] load  [s] save as  [d] delete  [c] clear  [Esc] close'}</Text>
+        )}
       </Box>
+
+      {savingEntry !== null && (
+        <Box>
+          <Text color="cyan">{'Save as: '}</Text>
+          <TextInput value={saveNameInput} onChange={setSaveNameInput} focus placeholder="request name..." />
+        </Box>
+      )}
 
       {confirmClear && (
         <Box>
