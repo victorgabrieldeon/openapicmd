@@ -418,6 +418,7 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
   const [lookupPickerOpen, setLookupPickerOpen] = useState(false);
   const [lookupPickerItems, setLookupPickerItems] = useState<Array<{ value: string; cols: string[] }>>([]);
   const [lookupPickerIdx, setLookupPickerIdx] = useState(0);
+  const [lookupPickerScrollOff, setLookupPickerScrollOff] = useState(0);
   const [lookupFetching, setLookupFetching] = useState(false);
   const [lookupError, setLookupError] = useState('');
   // Setup wizard fetch state (separate from the picker fetch above)
@@ -779,6 +780,7 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
         }
         setLookupPickerItems(items);
         setLookupPickerIdx(0);
+        setLookupPickerScrollOff(0);
         setLookupPickerOpen(true);
       });
   }, [state.spec, liveEnv, env]);
@@ -787,9 +789,25 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
     if (treeMode) return;
 
     if (lookupPickerOpen) {
+      // Reserve 4 lines: title + optional col header + margin + hints = ~4
+      const pickerVisible = Math.max(1, height - 4);
       if (key.escape) { setLookupPickerOpen(false); return; }
-      if (key.upArrow) { setLookupPickerIdx((i) => Math.max(0, i - 1)); return; }
-      if (key.downArrow) { setLookupPickerIdx((i) => Math.min(lookupPickerItems.length - 1, i + 1)); return; }
+      if (key.upArrow) {
+        setLookupPickerIdx((prev) => {
+          const next = Math.max(0, prev - 1);
+          setLookupPickerScrollOff((off) => (next < off ? next : off));
+          return next;
+        });
+        return;
+      }
+      if (key.downArrow) {
+        setLookupPickerIdx((prev) => {
+          const next = Math.min(lookupPickerItems.length - 1, prev + 1);
+          setLookupPickerScrollOff((off) => (next >= off + pickerVisible ? next - pickerVisible + 1 : off));
+          return next;
+        });
+        return;
+      }
       if (key.return && lookupPickerItems.length > 0) {
         const item = lookupPickerItems[lookupPickerIdx];
         if (item) insertFakerValue(item.value);
@@ -1888,6 +1906,14 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
     const padTo = (s: string, w: number) =>
       s.length > w ? s.slice(0, w - 1) + '…' : s.padEnd(w);
 
+    // Header lines: title(1) + colHeader(1 if any) + margin(1) = 2-3; reserve 3 to be safe
+    const headerLines = colCount > 0 ? 3 : 2;
+    const visibleRows = Math.max(1, height - headerLines);
+    const visibleItems = lookupPickerItems.slice(lookupPickerScrollOff, lookupPickerScrollOff + visibleRows);
+    const scrollInfo = lookupPickerItems.length > visibleRows
+      ? `  ${lookupPickerIdx + 1}/${lookupPickerItems.length}`
+      : '';
+
     return (
       <Box flexDirection="column" height={height} paddingX={1}>
         <Box>
@@ -1895,30 +1921,27 @@ export function RequestForm({ endpoint, env, fallbackBaseUrl = '', onClose, heig
           <Text color="white">{fieldKey}</Text>
           {lookup && <Text color="gray">{`  from ${lookup.method.toUpperCase()} ${lookup.path}`}</Text>}
           <Text color="gray">{'  [↑↓] navigate  [Enter] select  [Esc] cancel'}</Text>
+          {scrollInfo !== '' && <Text color="gray">{scrollInfo}</Text>}
         </Box>
         {/* Column header */}
         {colCount > 0 && (
-          <Box marginTop={1}>
-            <Text color="gray" wrap="truncate">{'    ' + padTo('value', valWidth) + displayPaths.map((dp, ci) => `  │ ${padTo(pathLastKey(dp), colWidths[ci] ?? 10)}`).join('')}</Text>
-          </Box>
+          <Text color="gray" wrap="truncate">{'    ' + padTo('value', valWidth) + displayPaths.map((dp, ci) => `  │ ${padTo(pathLastKey(dp), colWidths[ci] ?? 10)}`).join('')}</Text>
         )}
-        <Box flexDirection="column" marginTop={colCount > 0 ? 0 : 1}>
-          {lookupPickerItems.length === 0 ? (
-            <Text color="gray">{'No items'}</Text>
-          ) : (
-            lookupPickerItems.map((item, i) => {
-              const sel = i === lookupPickerIdx;
-              const rowText = (sel ? '  ▶ ' : '    ')
-                + (colCount > 0 ? padTo(item.value, valWidth) : item.value)
-                + item.cols.map((col, ci) => `  │ ${padTo(col, colWidths[ci] ?? 28)}`).join('');
-              return (
-                <Box key={i}>
-                  <Text backgroundColor={sel ? 'cyan' : undefined} color={sel ? 'black' : 'white'} wrap="truncate">{rowText}</Text>
-                </Box>
-              );
-            })
-          )}
-        </Box>
+        {/* Rows — Text directly in column Box (no Box wrapper) to avoid Yoga adding phantom height */}
+        {lookupPickerItems.length === 0 ? (
+          <Text color="gray">{'No items'}</Text>
+        ) : (
+          visibleItems.map((item, i) => {
+            const absIdx = lookupPickerScrollOff + i;
+            const sel = absIdx === lookupPickerIdx;
+            const rowText = (sel ? '  ▶ ' : '    ')
+              + (colCount > 0 ? padTo(item.value, valWidth) : item.value)
+              + item.cols.map((col, ci) => `  │ ${padTo(col, colWidths[ci] ?? 28)}`).join('');
+            return (
+              <Text key={absIdx} backgroundColor={sel ? 'cyan' : undefined} color={sel ? 'black' : 'white'} wrap="truncate">{rowText}</Text>
+            );
+          })
+        )}
       </Box>
     );
   }
